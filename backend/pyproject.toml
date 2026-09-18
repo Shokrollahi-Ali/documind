@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = ["fastapi>=0.141.1", "uvicorn[standard]>=0.53.0"]
 
 [dependency-groups]
-dev = ["ruff>=0.16.8"]
+dev = ["httpx>=0.28.1", "pytest>=9.1.1", "ruff>=0.16.8"]
 
 [tool.ruff]
 target-version = "py312"
@@ -13,3 +13,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
