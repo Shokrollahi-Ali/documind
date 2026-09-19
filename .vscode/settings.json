@@ -4,8 +4,10 @@
         "fastapi",
         "httpx",
         "mypy",
+        "pydantic",
         "pytest",
         "pythonpath",
+        "redoc",
         "testpaths",
         "uvicorn"
     ],
