@@ -3,6 +3,7 @@
         "Documind",
         "fastapi",
         "httpx",
+        "mypy",
         "pytest",
         "pythonpath",
         "testpaths",
