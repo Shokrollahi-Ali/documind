@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="Documind API")
+from documind.api.router import api_router
 
 
-@app.get("/health")
-async def get_health() -> dict[str, str]:
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    app = FastAPI(title="Documind API")
+    app.include_router(api_router)
+    return app
+
+
+app = create_app()
