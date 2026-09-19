@@ -1,13 +1,16 @@
 {
     "cSpell.words": [
+        "asyncio",
         "Documind",
         "fastapi",
         "httpx",
         "mypy",
+        "psycopg",
         "pydantic",
         "pytest",
         "pythonpath",
         "redoc",
+        "sqlalchemy",
         "testpaths",
         "uvicorn"
     ],
