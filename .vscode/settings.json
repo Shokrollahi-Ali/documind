@@ -17,5 +17,13 @@
     ],
     "python.analysis.extraPaths": [
         "${workspaceFolder}/backend/src"
-    ]
+    ],
+    "python.analysis.autoImportCompletions": true,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.ruff": "explicit"
+        }
+    }
 }
