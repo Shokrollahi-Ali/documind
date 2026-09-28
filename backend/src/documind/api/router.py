@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from documind.api.health import router as health_router
+from documind.api.readiness import router as readiness_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
+api_router.include_router(readiness_router)

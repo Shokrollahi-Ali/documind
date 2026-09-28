@@ -1,1 +1,2 @@
 HEALTH = "/health"
+READY = "/ready"
