@@ -12,10 +12,31 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U documind -d documind"]
+      test: [ "CMD-SHELL", "pg_isready -U documind -d documind" ]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  localstack:
+    image: localstack/localstack:2026.08.0
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set LOCALSTACK_AUTH_TOKEN in the root .env}
+      SERVICES: s3
+      PERSISTENCE: "1"
+      DOCUMIND_S3_BUCKET: ${DOCUMIND_S3_BUCKET:?Set DOCUMIND_S3_BUCKET in the root .env}
+      DOCUMIND_S3_REGION: ${DOCUMIND_S3_REGION:?Set DOCUMIND_S3_REGION in the root .env}
+    ports:
+      - "127.0.0.1:4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./infrastructure/localstack/init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: [ "CMD", "awslocal", "s3api", "list-buckets" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   postgres_data:
+  localstack_data:
