@@ -1,11 +1,14 @@
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.db.session import get_database_session
 from documind.main import create_app
+
+pytestmark = pytest.mark.usefixtures("s3_client_factory")
 
 
 def test_readiness_when_database_available() -> None:

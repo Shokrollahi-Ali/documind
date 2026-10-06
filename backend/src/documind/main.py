@@ -1,11 +1,12 @@
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 
 from fastapi import FastAPI
 
 from documind.api.router import api_router
 from documind.core.config import Settings
 from documind.db.session import create_database_engine, create_session_factory
+from documind.storage.s3 import create_s3_client
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -14,10 +15,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         engine = create_database_engine(config)
-        application.state.session_factory = create_session_factory(engine)
 
         try:
-            yield
+            application.state.session_factory = create_session_factory(engine)
+            with closing(create_s3_client(config)) as s3_client:
+                application.state.s3_client = s3_client
+                yield
         finally:
             await engine.dispose()
 

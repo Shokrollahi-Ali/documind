@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import boto3
 from botocore.config import Config
+from fastapi import Request
 
 from documind.core.config import Settings
 
@@ -44,3 +45,7 @@ def create_s3_client(settings: Settings) -> S3Client:
         aws_secret_access_key=secret_access_key,
         config=client_config,
     )
+
+
+async def get_s3_client(request: Request) -> S3Client:
+    return cast("S3Client", request.app.state.s3_client)
