@@ -32,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if config.environment != "production" else None,
     )
+    app.state.settings = config
     app.include_router(api_router)
     return app
 

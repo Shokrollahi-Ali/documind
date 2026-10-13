@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, BinaryIO, cast
 
 import boto3
 from botocore.config import Config
 from fastapi import Request
+from starlette.concurrency import run_in_threadpool
 
 from documind.core.config import Settings
 
@@ -49,3 +50,23 @@ def create_s3_client(settings: Settings) -> S3Client:
 
 async def get_s3_client(request: Request) -> S3Client:
     return cast("S3Client", request.app.state.s3_client)
+
+
+async def upload_document_file(
+    s3_client: S3Client, file: BinaryIO, bucket: str, storage_key: str, content_type: str
+) -> None:
+    await run_in_threadpool(
+        s3_client.upload_fileobj,
+        Fileobj=file,
+        Bucket=bucket,
+        Key=storage_key,
+        ExtraArgs={"ContentType": content_type},
+    )
+
+
+async def delete_document_file(
+    s3_client: S3Client,
+    bucket: str,
+    storage_key: str,
+) -> None:
+    await run_in_threadpool(s3_client.delete_object, Bucket=bucket, Key=storage_key)
