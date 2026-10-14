@@ -47,3 +47,61 @@ jobs:
 
       - name: Run unit tests
         run: uv run --locked pytest -m "not integration"
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+
+    env:
+      POSTGRES_PASSWORD: documind-ci-only
+      LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+      DOCUMIND_ENVIRONMENT: test
+      DOCUMIND_DATABASE_URL: postgresql+psycopg://documind:documind-ci-only@localhost:5433/documind_test
+      DOCUMIND_S3_BUCKET: documind-documents-test
+      DOCUMIND_S3_REGION: us-east-1
+      DOCUMIND_S3_ENDPOINT_URL: http://localhost:4567
+      DOCUMIND_S3_ACCESS_KEY_ID: test
+      DOCUMIND_S3_SECRET_ACCESS_KEY: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        with:
+          version: "0.12.19"
+          python-version: "3.12"
+          working-directory: backend
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Start test services
+        working-directory: .
+        run: docker compose -f compose.test.yml up -d --wait --wait-timeout 180
+
+      - name: Apply database migrations
+        run: uv run --locked alembic upgrade head
+
+      - name: Run integration tests
+        run: uv run --locked pytest -m integration
+
+      - name: Show service logs on failure
+        if: failure()
+        working-directory: .
+        run: docker compose -f compose.test.yml logs --no-color --tail 100
+
+      - name: Stop test services
+        if: always()
+        working-directory: .
+        run: docker compose -f compose.test.yml down --volumes --remove-orphans
