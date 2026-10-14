@@ -20,5 +20,6 @@
     ],
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
-    }
+    },
+    "mypy-type-checker.cwd": "${workspaceFolder}/backend",
 }

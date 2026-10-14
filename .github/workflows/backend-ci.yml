@@ -45,5 +45,5 @@ jobs:
       - name: Check types
         run: uv run --locked mypy
 
-      - name: Run tests
-        run: uv run --locked pytest
+      - name: Run unit tests
+        run: uv run --locked pytest -m "not integration"

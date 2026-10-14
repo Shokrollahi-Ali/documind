@@ -33,8 +33,12 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = ["integration: tests that require PostgreSQL and LocalStack"]
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
