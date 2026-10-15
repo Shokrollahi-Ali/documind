@@ -101,7 +101,7 @@ describe("document upload interaction", () => {
     expect(screen.getByRole("button", { name: "Upload document" })).toBeDisabled();
   });
 
-  it("prevents duplicate submissions while pending and shows saved metadata", async () => {
+  it("prevents duplicate submissions while pending and confirms success", async () => {
     const user = userEvent.setup();
     let finishUpload!: (value: typeof uploadedDocument) => void;
     vi.mocked(uploadDocument).mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
@@ -118,8 +118,6 @@ describe("document upload interaction", () => {
     await act(async () => finishUpload(uploadedDocument));
 
     expect(screen.getByRole("status")).toHaveTextContent("uploaded successfully");
-    expect(screen.getByRole("region", { name: "Uploaded document" })).toHaveTextContent(uploadedDocument.id);
-    expect(screen.getByText("Uploaded", { exact: true })).toBeInTheDocument();
     expect(input).toHaveValue("");
     expect(input).toBeEnabled();
   });

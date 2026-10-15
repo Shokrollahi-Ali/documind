@@ -37,9 +37,9 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Document uploads
 
-The homepage lets you select, replace, remove, and upload one PDF. It displays the saved document metadata after a successful upload. The latest result is held in page state and is cleared on reload; a persisted document list is not implemented yet.
+The homepage lets you select, replace, remove, and upload one PDF. It displays the saved document metadata after a successful upload. The Saved documents list loads persisted metadata from FastAPI, newest first, with ten documents per page. It remains available after a reload and refreshes after successful uploads. TanStack Query manages the list cache; the file selection stays in local React state.
 
-Copy `.env.example` to `.env.local` in the frontend directory, then set `DOCUMIND_API_URL` to your FastAPI service URL. This variable is server-only. `DOCUMIND_UPLOAD_TIMEOUT_MS` controls the upstream upload timeout and defaults to 120000 milliseconds. Restart the development server after configuration changes.
+Copy `.env.example` to `.env.local` in the frontend directory, then set `DOCUMIND_API_URL` to your FastAPI service URL. This variable is server-only. `DOCUMIND_UPLOAD_TIMEOUT_MS` controls the upstream upload timeout and defaults to 120000 milliseconds. List requests use `DOCUMIND_API_TIMEOUT_MS`, defaulting to 10000 milliseconds. Restart the development server after configuration changes.
 
 ```bash
 cp .env.example .env.local
@@ -62,3 +62,7 @@ npm run build
 ```
 
 Component tests use Vitest, React Testing Library, and jsdom. They exercise selection, replacement, removal, upload states, and validation feedback. Node-environment tests verify multipart forwarding, backend errors, timeouts, and upload response validation.
+
+## Document list API
+
+`GET /documents?limit=10&offset=0` returns `items`, `has_more`, `limit`, and `offset`. Limits range from 1 to 100. Documents are ordered by creation time descending, then ID descending to break ties. Offset pagination is not a snapshot: concurrent uploads can shift page boundaries. Uploading from this page resets the list to its first page.

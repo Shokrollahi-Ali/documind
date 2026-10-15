@@ -1,4 +1,4 @@
-import DocumentUpload from "@/features/documents/components/document-upload";
+import DocumentWorkspace from "@/features/documents/components/document-workspace";
 
 export default function HomePage() {
   return (
@@ -10,7 +10,7 @@ export default function HomePage() {
           Select a PDF document to get started.
         </p>
       </header>
-      <DocumentUpload />
+      <DocumentWorkspace />
     </main>
   );
 }

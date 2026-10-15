@@ -1,29 +1,5 @@
-export type UploadedDocument = {
-  id: string;
-  original_filename: string;
-  content_type: string;
-  size_bytes: number;
-  status: "uploaded" | "processing" | "ready" | "failed";
-  created_at: string;
-};
-
-function isUploadedDocument(value: unknown): value is UploadedDocument {
-  if (typeof value !== "object" || value === null) return false;
-
-  const document = value as Record<string, unknown>;
-  const validStatuses = ["uploaded", "processing", "ready", "failed"];
-
-  return (
-    typeof document.id === "string" && document.id.length > 0 &&
-    typeof document.original_filename === "string" &&
-    typeof document.content_type === "string" &&
-    typeof document.size_bytes === "number" &&
-    Number.isSafeInteger(document.size_bytes) && document.size_bytes > 0 &&
-    typeof document.status === "string" && validStatuses.includes(document.status) &&
-    typeof document.created_at === "string" &&
-    Number.isFinite(Date.parse(document.created_at))
-  );
-}
+import { isDocumentMetadata } from "../lib/document";
+import type { DocumentMetadata } from "../lib/document";
 
 function getUploadError(payload: unknown): string {
   if (
@@ -36,7 +12,7 @@ function getUploadError(payload: unknown): string {
   return "The upload failed. Please try again later.";
 }
 
-export async function uploadDocument(file: File): Promise<UploadedDocument> {
+export async function uploadDocument(file: File): Promise<DocumentMetadata> {
   const formData = new FormData();
   const pdfFile = file.type ? file : new File([file], file.name, { type: "application/pdf" });
   formData.append("file", pdfFile);
@@ -57,7 +33,7 @@ export async function uploadDocument(file: File): Promise<UploadedDocument> {
     throw new Error(getUploadError(payload));
   }
 
-  if (!isUploadedDocument(payload)) {
+  if (!isDocumentMetadata(payload)) {
     throw new Error("The service returned an unexpected response. The document may have been saved; check before retrying.");
   }
 

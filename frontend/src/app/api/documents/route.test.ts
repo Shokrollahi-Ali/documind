@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 function createUploadRequest() {
   const formData = new FormData();
@@ -89,5 +89,37 @@ describe("document upload route", () => {
 
     expect(response.status).toBe(504);
     expect(await response.text()).toContain("may have been saved");
+  });
+});
+
+
+describe("document list route", () => {
+  it("forwards only validated pagination and disables caching", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ items: [], has_more: false, limit: 10, offset: 20 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await GET(new Request("http://localhost/api/documents?limit=10&offset=20&ignored=value"));
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0].toString()).toBe("http://backend:8000/documents?limit=10&offset=20");
+    expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it.each(["limit=0", "limit=101", "offset=-1", "offset=1.5"])("rejects invalid pagination", async (query) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect((await GET(new Request(`http://localhost/api/documents?${query}`))).status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves backend errors", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "Unavailable" }, { status: 503 })));
+    expect((await GET(new Request("http://localhost/api/documents"))).status).toBe(503);
+  });
+
+  it("returns a safe gateway error on connection failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("private error")));
+    const response = await GET(new Request("http://localhost/api/documents"));
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain("private error");
   });
 });

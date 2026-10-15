@@ -1,4 +1,4 @@
-function getUploadConfiguration() {
+function getDocumentsUrl() {
   const apiUrl = process.env.DOCUMIND_API_URL;
   if (!apiUrl) throw new Error("DOCUMIND_API_URL is required");
 
@@ -7,6 +7,12 @@ function getUploadConfiguration() {
     throw new Error("DOCUMIND_API_URL must be an HTTP service URL");
   }
   url.pathname = `${url.pathname.replace(/\/$/, "")}/documents`;
+
+  return url;
+}
+
+function getUploadConfiguration() {
+  const url = getDocumentsUrl();
 
   const timeoutMs = Number(process.env.DOCUMIND_UPLOAD_TIMEOUT_MS ?? "120000");
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2147483647) {
@@ -63,5 +69,52 @@ export async function POST(request: Request): Promise<Response> {
       : "The upload could not be confirmed. The document service may be unavailable; check before retrying.";
 
     return Response.json({ detail }, { status: timeoutSignal.aborted ? 504 : 502 });
+  }
+}
+
+export async function GET(request: Request): Promise<Response> {
+  const query = new URL(request.url).searchParams;
+  const limit = Number(query.get("limit") ?? "10");
+  const offset = Number(query.get("offset") ?? "0");
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) {
+    return Response.json({ detail: "Invalid pagination parameters." }, { status: 422 });
+  }
+
+  let url: URL;
+  let timeoutMs: number;
+  try {
+    url = getDocumentsUrl();
+    timeoutMs = Number(process.env.DOCUMIND_API_TIMEOUT_MS ?? "10000");
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2147483647) {
+      throw new Error("Invalid DOCUMIND_API_TIMEOUT_MS");
+    }
+  } catch (error) {
+    console.error("Invalid document list configuration", error);
+    return Response.json({ detail: "Document listing is not configured." }, { status: 503 });
+  }
+
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("offset", String(offset));
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.any([request.signal, timeoutSignal]),
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: {
+        "Content-Type": response.headers.get("content-type") ?? "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    console.error("Document listing request failed", error);
+    return Response.json(
+      { detail: "The document service is temporarily unavailable." },
+      { status: timeoutSignal.aborted ? 504 : 502 },
+    );
   }
 }

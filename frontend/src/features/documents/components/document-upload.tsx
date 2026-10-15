@@ -4,11 +4,9 @@ import { useId, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 import { uploadDocument } from "../api/upload-document";
-import type { UploadedDocument } from "../api/upload-document";
 import { validateDocumentFile } from "../lib/validate-document-file";
-import UploadedDocumentDetails from "./uploaded-document-details";
 
-export default function DocumentUpload() {
+export default function DocumentUpload({ onUploaded }: { onUploaded?: () => void }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -16,13 +14,13 @@ export default function DocumentUpload() {
 
   const uploadInProgress = useRef(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
+  const [uploadSucceeded, setUploadSucceeded] = useState(false);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
 
-    setUploadedDocument(null);
+    setUploadSucceeded(false);
     const validationError = validateDocumentFile(file);
     setError(validationError);
     setSelectedFile(validationError ? null : file);
@@ -48,11 +46,12 @@ export default function DocumentUpload() {
     uploadInProgress.current = true;
     setIsUploading(true);
     setError(null);
-    setUploadedDocument(null);
+    setUploadSucceeded(false);
     try {
-      const document = await uploadDocument(selectedFile);
+      await uploadDocument(selectedFile);
 
-      setUploadedDocument(document);
+      setUploadSucceeded(true);
+      onUploaded?.();
       setSelectedFile(null);
       if (inputRef.current) inputRef.current.value = "";
     } catch (uploadError) {
@@ -66,7 +65,7 @@ export default function DocumentUpload() {
   let statusMessage = "No document selected.";
   if (isUploading) {
     statusMessage = "Uploading your document…";
-  } else if (uploadedDocument) {
+  } else if (uploadSucceeded) {
     statusMessage = "Your document was uploaded successfully.";
   } else if (selectedFile) {
     statusMessage = `Selected: ${selectedFile.name}`;
@@ -139,7 +138,6 @@ export default function DocumentUpload() {
           </button>
         </form>
       </section>
-      {uploadedDocument && <UploadedDocumentDetails document={uploadedDocument} />}
     </>
   );
 }
