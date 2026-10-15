@@ -1,4 +1,4 @@
-import DocumentSelection from "@/features/documents/components/document-selection";
+import DocumentUpload from "@/features/documents/components/document-upload";
 
 export default function HomePage() {
   return (
@@ -10,7 +10,7 @@ export default function HomePage() {
           Select a PDF document to get started.
         </p>
       </header>
-      <DocumentSelection />
+      <DocumentUpload />
     </main>
   );
 }
