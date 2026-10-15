@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.integration
 
 
-def test_upload_persists_document_and_file(
+def test_uploaded_document_can_be_retrieved(
     integration_client: TestClient,
     integration_database_engine: Engine,
     integration_s3_client: "S3Client",
@@ -63,6 +63,10 @@ def test_upload_persists_document_and_file(
             assert body.read() == pdf_content
 
         assert stored_file["ContentType"] == "application/pdf"
+        retrieval_response = integration_client.get(f"/documents/{document_id}")
+
+        assert retrieval_response.status_code == 200, retrieval_response.text
+        assert retrieval_response.json() == response_data
 
     finally:
         with Session(integration_database_engine) as session:

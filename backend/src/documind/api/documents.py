@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Annotated
+from uuid import UUID
 
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import BotoCoreError, ClientError
@@ -10,11 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.api.dependencies import get_settings
-from documind.api.routes import DOCUMENTS
+from documind.api.routes import DOCUMENT_DETAIL, DOCUMENTS
 from documind.api.upload_validation import validate_document_upload
 from documind.core.config import Settings
 from documind.db.session import get_database_session
-from documind.documents.service import create_document
+from documind.documents.service import create_document, get_document
 from documind.schemas.document import DocumentResponse
 from documind.storage.s3 import get_s3_client
 
@@ -63,3 +64,25 @@ async def upload_document(
 
     finally:
         await file.close()
+
+
+@router.get(DOCUMENT_DETAIL, response_model=DocumentResponse)
+async def retrieve_document(
+    document_id: UUID, database_session: Annotated[AsyncSession, Depends(get_database_session)]
+) -> DocumentResponse:
+    try:
+        document = await get_document(database_session=database_session, document_id=document_id)
+    except SQLAlchemyError as error:
+        logger.exception("Document retrieval failed during database lookup")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document persistence is temporarily unavailable",
+        ) from error
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    return DocumentResponse.model_validate(document)

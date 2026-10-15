@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, BinaryIO
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,3 +80,7 @@ async def create_document(
         raise
 
     return document
+
+
+async def get_document(database_session: AsyncSession, document_id: UUID) -> Document | None:
+    return await database_session.get(Document, document_id)

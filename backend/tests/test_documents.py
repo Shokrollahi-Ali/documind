@@ -151,3 +151,81 @@ def test_returns_service_unavailable_when_document_creation_fails(
     assert response.json() == {"detail": expected_detail}
     create_document.assert_awaited_once()
     assert create_document.call_args.kwargs["file"].closed
+
+
+def test_get_returns_document(client: TestClient) -> None:
+    document_id = uuid4()
+    document = Document(
+        id=document_id,
+        original_filename="document.pdf",
+        storage_key=f"documents/{document_id}.pdf",
+        content_type="application/pdf",
+        size_bytes=1024,
+        status=DocumentStatus.UPLOADED,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    with patch(
+        "documind.api.documents.get_document",
+        return_value=document,
+    ) as get_document:
+        response = client.get(f"/documents/{document_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(document_id),
+        "original_filename": "document.pdf",
+        "content_type": "application/pdf",
+        "size_bytes": 1024,
+        "status": "uploaded",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+
+    get_document.assert_awaited_once()
+    assert get_document.call_args.kwargs["document_id"] == document_id
+
+
+def test_get_returns_not_found_when_document_is_missing(
+    client: TestClient,
+) -> None:
+    document_id = uuid4()
+
+    with patch(
+        "documind.api.documents.get_document",
+        return_value=None,
+    ) as get_document:
+        response = client.get(f"/documents/{document_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Document not found"}
+    get_document.assert_awaited_once()
+    assert get_document.call_args.kwargs["document_id"] == document_id
+
+
+def test_get_rejects_invalid_document_id(client: TestClient) -> None:
+    with patch("documind.api.documents.get_document") as get_document:
+        response = client.get("/documents/not-a-uuid")
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert errors[0]["loc"] == ["path", "document_id"]
+    get_document.assert_not_called()
+
+
+def test_get_returns_service_unavailable_when_database_fails(
+    client: TestClient,
+) -> None:
+    document_id = uuid4()
+
+    with patch(
+        "documind.api.documents.get_document",
+        side_effect=SQLAlchemyError("Internal database failure"),
+    ) as get_document:
+        response = client.get(f"/documents/{document_id}")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Document persistence is temporarily unavailable",
+    }
+    get_document.assert_awaited_once()
+    assert get_document.call_args.kwargs["document_id"] == document_id
