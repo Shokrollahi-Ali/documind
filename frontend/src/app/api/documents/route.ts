@@ -1,15 +1,4 @@
-function getDocumentsUrl() {
-  const apiUrl = process.env.DOCUMIND_API_URL;
-  if (!apiUrl) throw new Error("DOCUMIND_API_URL is required");
-
-  const url = new URL(apiUrl);
-  if (!["http:", "https:"].includes(url.protocol) || url.search || url.hash) {
-    throw new Error("DOCUMIND_API_URL must be an HTTP service URL");
-  }
-  url.pathname = `${url.pathname.replace(/\/$/, "")}/documents`;
-
-  return url;
-}
+import { getDocumentApiConfiguration, getDocumentsUrl } from "../../../lib/server/document-api";
 
 function getUploadConfiguration() {
   const url = getDocumentsUrl();
@@ -83,11 +72,7 @@ export async function GET(request: Request): Promise<Response> {
   let url: URL;
   let timeoutMs: number;
   try {
-    url = getDocumentsUrl();
-    timeoutMs = Number(process.env.DOCUMIND_API_TIMEOUT_MS ?? "10000");
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2147483647) {
-      throw new Error("Invalid DOCUMIND_API_TIMEOUT_MS");
-    }
+    ({ url, timeoutMs } = getDocumentApiConfiguration());
   } catch (error) {
     console.error("Invalid document list configuration", error);
     return Response.json({ detail: "Document listing is not configured." }, { status: 503 });

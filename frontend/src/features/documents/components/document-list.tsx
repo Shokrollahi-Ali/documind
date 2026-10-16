@@ -1,7 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useState } from "react";
+
+import DocumentDelete from "./document-delete";
+import type { DocumentPage } from "../api/list-documents";
 import { listDocuments } from "../api/list-documents";
 
 const pageSize = 10;
@@ -13,6 +17,20 @@ const statusLabels = {
 };
 
 export default function DocumentList({ page, onPageChange }: { page: number; onPageChange: (page: number) => void }) {
+  const queryClient = useQueryClient();
+  const [deletionMessage, setDeletionMessage] = useState("");
+
+  async function handleDeleted(documentId: string) {
+    await queryClient.cancelQueries({ queryKey: ["documents"] });
+    queryClient.setQueriesData<DocumentPage>({ queryKey: ["documents"] }, (cachedPage) => {
+      if (!cachedPage) return cachedPage;
+      return { ...cachedPage, items: cachedPage.items.filter((item) => item.id !== documentId) };
+    });
+    setDeletionMessage("Document deleted.");
+    onPageChange(0);
+    await queryClient.invalidateQueries({ queryKey: ["documents"] });
+  }
+
   const documents = useQuery({
     queryKey: ["documents", { limit: pageSize, offset: page * pageSize }],
     queryFn: ({ signal }) => listDocuments(pageSize, page * pageSize, signal),
@@ -33,7 +51,7 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
           Refresh list
         </button>
       </div>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Newest uploads first.</p>
+      {deletionMessage && <p role="status" className="mt-4 text-sm">{deletionMessage}</p>}
       {documents.isFetching && <p role="status" className="mt-4 text-sm">Loading documents…</p>}
       {documents.isError && <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-400">Could not load the latest documents. Use Refresh list to try again.</p>}
       {documents.data && (
@@ -51,10 +69,10 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
                     <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-800">{statusLabels[document.status]}</span>
                   </div>
                   <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    <div><dt>Size</dt><dd>{new Intl.NumberFormat("en").format(document.size_bytes)} bytes</dd></div>
+                    <div><dt>Size</dt><dd>{document.size_bytes < 10000 ? "< 0.01" : new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(document.size_bytes / 1000000)} MB</dd></div>
                     <div><dt>Uploaded (UTC)</dt><dd><time dateTime={document.created_at}>{new Date(document.created_at).toISOString().slice(0, 10)}</time></dd></div>
                   </dl>
-                  <p className="mt-2 break-all text-xs text-zinc-500">ID: {document.id}</p>
+                  <DocumentDelete document={document} onDeleted={handleDeleted} />
                 </li>
               ))}
             </ul>

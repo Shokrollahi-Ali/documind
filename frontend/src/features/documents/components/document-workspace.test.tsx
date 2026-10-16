@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,10 +22,17 @@ function pageResponse(items = [document], offset = 0, hasMore = false) {
 
 beforeEach(() => {
   vi.mocked(uploadDocument).mockReset();
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: { configurable: true, value: function (this: HTMLDialogElement) { this.open = true; } },
+    close: { configurable: true, value: function (this: HTMLDialogElement) { this.open = false; } },
+  });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
+  Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
 });
 
 describe("document workspace", () => {
@@ -34,7 +41,7 @@ describe("document workspace", () => {
     render(<DocumentWorkspace />);
 
     expect(await screen.findByRole("heading", { name: "saved.pdf" })).toBeInTheDocument();
-    expect(screen.getByText("128 bytes")).toBeInTheDocument();
+    expect(screen.getByText("< 0.01 MB")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
@@ -102,4 +109,83 @@ describe("document workspace", () => {
     expect(await within(list).findByRole("heading", { name: "new.pdf" })).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });
+});
+
+it("requires confirmation and allows cancellation without sending DELETE", async () => {
+  const user = userEvent.setup();
+  const fetchMock = vi.fn().mockResolvedValue(pageResponse());
+  vi.stubGlobal("fetch", fetchMock);
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  expect(screen.getByRole("dialog", { name: "Delete document?" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByText(/This permanently removes/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("disables confirmation while deleting and refreshes the list on success", async () => {
+  const user = userEvent.setup();
+  let completeDeletion!: (response: Response) => void;
+  let deleted = false;
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, options: RequestInit) => {
+    if (options.method === "DELETE") {
+      return new Promise<Response>((resolve) => { completeDeletion = resolve; });
+    }
+    return Promise.resolve(pageResponse(deleted ? [] : [document]));
+  }));
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+  expect(screen.getByRole("button", { name: "Deleting…" })).toBeDisabled();
+  expect(fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }))).toBe(false);
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  deleted = true;
+  completeDeletion(new Response(null, { status: 204 }));
+  expect(await screen.findByText("Document deleted.")).toBeInTheDocument();
+  expect(await screen.findByText("No documents yet. Upload a PDF to get started.")).toBeInTheDocument();
+});
+
+it("keeps the document and shows an error when deletion fails", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, options: RequestInit) => Promise.resolve(
+    options.method === "DELETE" ? new Response(null, { status: 503 }) : pageResponse(),
+  )));
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not delete");
+  expect(screen.getByRole("heading", { name: "saved.pdf" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Confirm deletion" })).toBeEnabled();
+});
+
+it("returns to the first page after deleting the last document on a later page", async () => {
+  const user = userEvent.setup();
+  let deleted = false;
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (options.method === "DELETE") {
+      deleted = true;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (url.includes("offset=10")) return Promise.resolve(pageResponse(deleted ? [] : [document], 10));
+    return Promise.resolve(pageResponse([{ ...document, id: "another-id", original_filename: "newer.pdf" }], 0, !deleted));
+  }));
+  render(<DocumentWorkspace />);
+  await screen.findByRole("heading", { name: "newer.pdf" });
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+  expect(await screen.findByRole("heading", { name: "newer.pdf" })).toBeInTheDocument();
+  expect(screen.getByText("Page 1")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeDisabled());
+});
+
+
+it("allows Escape dismissal before deletion starts", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pageResponse()));
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  expect(fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }))).toBe(true);
 });
