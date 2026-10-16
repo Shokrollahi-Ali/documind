@@ -229,3 +229,56 @@ def test_get_returns_service_unavailable_when_database_fails(
     }
     get_document.assert_awaited_once()
     assert get_document.call_args.kwargs["document_id"] == document_id
+
+
+def test_list_returns_paginated_documents(client: TestClient) -> None:
+    documents = [
+        Document(
+            id=uuid4(),
+            original_filename=f"document-{index}.pdf",
+            storage_key=f"documents/{uuid4()}.pdf",
+            content_type="application/pdf",
+            size_bytes=1024,
+            status=DocumentStatus.UPLOADED,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        for index in range(3)
+    ]
+    with patch("documind.api.documents.list_documents", return_value=documents) as service:
+        response = client.get("/documents", params={"limit": 2, "offset": 4})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_more"] is True
+    assert data["limit"] == 2
+    assert data["offset"] == 4
+    assert [item["id"] for item in data["items"]] == [str(item.id) for item in documents[:2]]
+    assert "storage_key" not in data["items"][0]
+    service.assert_awaited_once()
+    assert service.call_args.kwargs["limit"] == 3
+    assert service.call_args.kwargs["offset"] == 4
+
+
+def test_list_returns_empty_page(client: TestClient) -> None:
+    with patch("documind.api.documents.list_documents", return_value=[]):
+        response = client.get("/documents")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "has_more": False, "limit": 10, "offset": 0}
+
+
+@pytest.mark.parametrize("query", ["limit=0", "limit=101", "limit=abc", "offset=-1", "offset=1.5"])
+def test_list_rejects_invalid_pagination(client: TestClient, query: str) -> None:
+    with patch("documind.api.documents.list_documents") as service:
+        response = client.get(f"/documents?{query}")
+
+    assert response.status_code == 422
+    service.assert_not_called()
+
+
+def test_list_returns_service_unavailable_on_database_failure(client: TestClient) -> None:
+    with patch("documind.api.documents.list_documents", side_effect=SQLAlchemyError("private")):
+        response = client.get("/documents")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Document persistence is temporarily unavailable"}

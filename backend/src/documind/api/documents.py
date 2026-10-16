@@ -6,7 +6,7 @@ from uuid import UUID
 
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,8 +15,8 @@ from documind.api.routes import DOCUMENT_DETAIL, DOCUMENTS
 from documind.api.upload_validation import validate_document_upload
 from documind.core.config import Settings
 from documind.db.session import get_database_session
-from documind.documents.service import create_document, get_document
-from documind.schemas.document import DocumentResponse
+from documind.documents.service import create_document, get_document, list_documents
+from documind.schemas.document import DocumentListResponse, DocumentResponse
 from documind.storage.s3 import get_s3_client
 
 if TYPE_CHECKING:
@@ -86,3 +86,28 @@ async def retrieve_document(
         )
 
     return DocumentResponse.model_validate(document)
+
+
+@router.get(DOCUMENTS, response_model=DocumentListResponse)
+async def retrieve_documents(
+    database_session: Annotated[AsyncSession, Depends(get_database_session)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> DocumentListResponse:
+    try:
+        documents = await list_documents(
+            database_session=database_session, limit=limit + 1, offset=offset
+        )
+    except SQLAlchemyError as error:
+        logger.exception("Document listing failed during database lookup")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document persistence is temporarily unavailable",
+        ) from error
+
+    return DocumentListResponse(
+        items=[DocumentResponse.model_validate(document) for document in documents[:limit]],
+        has_more=len(documents) > limit,
+        limit=limit,
+        offset=offset,
+    )

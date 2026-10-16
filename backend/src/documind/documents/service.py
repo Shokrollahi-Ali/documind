@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING, BinaryIO
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.models.document import Document, DocumentStatus
@@ -84,3 +85,15 @@ async def create_document(
 
 async def get_document(database_session: AsyncSession, document_id: UUID) -> Document | None:
     return await database_session.get(Document, document_id)
+
+
+async def list_documents(database_session: AsyncSession, limit: int, offset: int) -> list[Document]:
+    statement = (
+        select(Document)
+        .order_by(Document.created_at.desc(), Document.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    documents = await database_session.scalars(statement)
+    return list(documents.all())

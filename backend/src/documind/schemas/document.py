@@ -15,3 +15,10 @@ class DocumentResponse(BaseModel):
     size_bytes: int
     status: DocumentStatus
     created_at: datetime
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentResponse]
+    has_more: bool
+    limit: int
+    offset: int
