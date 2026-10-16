@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import pytest
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.integration
 
 
-def test_uploaded_document_can_be_retrieved(
+def test_uploaded_document_can_be_retrieved_and_deleted(
     integration_client: TestClient,
     integration_database_engine: Engine,
     integration_s3_client: "S3Client",
@@ -25,6 +26,7 @@ def test_uploaded_document_can_be_retrieved(
 ) -> None:
     filename = f"integration-{uuid4()}.pdf"
     bucket = integration_settings.s3_bucket
+    storage_key: str | None = None
 
     try:
         response = integration_client.post(
@@ -68,7 +70,30 @@ def test_uploaded_document_can_be_retrieved(
         assert retrieval_response.status_code == 200, retrieval_response.text
         assert retrieval_response.json() == response_data
 
+        deletion_response = integration_client.delete(f"/documents/{document_id}")
+
+        assert deletion_response.status_code == 204, deletion_response.text
+        assert deletion_response.content == b""
+
+        with Session(integration_database_engine) as session:
+            assert session.get(Document, document_id) is None
+
+        with pytest.raises(ClientError) as exception_info:
+            integration_s3_client.head_object(
+                Bucket=bucket,
+                Key=storage_key,
+            )
+
+        assert exception_info.value.response["ResponseMetadata"]["HTTPStatusCode"] == 404
+
+        assert integration_client.get(f"/documents/{document_id}").status_code == 404
+        assert integration_client.delete(f"/documents/{document_id}").status_code == 404
     finally:
+        if storage_key is not None:
+            integration_s3_client.delete_object(
+                Bucket=bucket,
+                Key=storage_key,
+            )
         with Session(integration_database_engine) as session:
             documents = session.scalars(
                 select(Document).where(Document.original_filename == filename)

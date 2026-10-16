@@ -1,4 +1,4 @@
 HEALTH = "/health"
 READY = "/ready"
 DOCUMENTS = "/documents"
-DOCUMENT_DETAIL = DOCUMENTS + "/{document_id}"
+DOCUMENT_ID = DOCUMENTS + "/{document_id}"

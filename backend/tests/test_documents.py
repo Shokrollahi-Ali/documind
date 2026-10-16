@@ -282,3 +282,81 @@ def test_list_returns_service_unavailable_on_database_failure(client: TestClient
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Document persistence is temporarily unavailable"}
+
+
+def test_delete_returns_no_content(client: TestClient) -> None:
+    document_id = uuid4()
+
+    with patch(
+        "documind.api.documents.delete_document",
+        return_value=True,
+    ) as delete_document:
+        response = client.delete(f"/documents/{document_id}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+    delete_document.assert_awaited_once()
+    arguments = delete_document.call_args.kwargs
+    assert arguments["document_id"] == document_id
+    assert arguments["bucket"] == "test-documents"
+
+
+def test_delete_returns_not_found_when_document_is_missing(
+    client: TestClient,
+) -> None:
+    document_id = uuid4()
+
+    with patch(
+        "documind.api.documents.delete_document",
+        return_value=False,
+    ) as delete_document:
+        response = client.delete(f"/documents/{document_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Document not found"}
+
+    delete_document.assert_awaited_once()
+    assert delete_document.call_args.kwargs["document_id"] == document_id
+
+
+def test_delete_rejects_invalid_document_id(client: TestClient) -> None:
+    with patch("documind.api.documents.delete_document") as delete_document:
+        response = client.delete("/documents/not-a-uuid")
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert errors[0]["loc"] == ["path", "document_id"]
+    delete_document.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("service_error", "expected_detail"),
+    [
+        (
+            EndpointConnectionError(endpoint_url="https://s3.example.com"),
+            "Document storage is temporarily unavailable",
+        ),
+        (
+            SQLAlchemyError("Internal database failure"),
+            "Document persistence is temporarily unavailable",
+        ),
+    ],
+)
+def test_delete_returns_service_unavailable(
+    client: TestClient,
+    service_error: Exception,
+    expected_detail: str,
+) -> None:
+    document_id = uuid4()
+
+    with patch(
+        "documind.api.documents.delete_document",
+        side_effect=service_error,
+    ) as delete_document:
+        response = client.delete(f"/documents/{document_id}")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": expected_detail}
+    delete_document.assert_awaited_once()
+    assert delete_document.call_args.kwargs["document_id"] == document_id

@@ -97,3 +97,25 @@ async def list_documents(database_session: AsyncSession, limit: int, offset: int
 
     documents = await database_session.scalars(statement)
     return list(documents.all())
+
+
+async def delete_document(
+    database_session: AsyncSession, s3_client: S3Client, document_id: UUID, bucket: str
+) -> bool:
+    async with database_session.begin():
+        document = await database_session.get(
+            Document,
+            document_id,
+            with_for_update=True,
+        )
+
+        if document is None:
+            return False
+
+        await delete_document_file(
+            s3_client=s3_client, bucket=bucket, storage_key=document.storage_key
+        )
+
+        await database_session.delete(document)
+
+    return True

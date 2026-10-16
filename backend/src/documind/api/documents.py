@@ -6,16 +6,21 @@ from uuid import UUID
 
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.api.dependencies import get_settings
-from documind.api.routes import DOCUMENT_DETAIL, DOCUMENTS
+from documind.api.routes import DOCUMENT_ID, DOCUMENTS
 from documind.api.upload_validation import validate_document_upload
 from documind.core.config import Settings
 from documind.db.session import get_database_session
-from documind.documents.service import create_document, get_document, list_documents
+from documind.documents.service import (
+    create_document,
+    delete_document,
+    get_document,
+    list_documents,
+)
 from documind.schemas.document import DocumentListResponse, DocumentResponse
 from documind.storage.s3 import get_s3_client
 
@@ -66,7 +71,7 @@ async def upload_document(
         await file.close()
 
 
-@router.get(DOCUMENT_DETAIL, response_model=DocumentResponse)
+@router.get(DOCUMENT_ID, response_model=DocumentResponse)
 async def retrieve_document(
     document_id: UUID, database_session: Annotated[AsyncSession, Depends(get_database_session)]
 ) -> DocumentResponse:
@@ -111,3 +116,38 @@ async def retrieve_documents(
         limit=limit,
         offset=offset,
     )
+
+
+@router.delete(DOCUMENT_ID, status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def remove_document(
+    document_id: UUID,
+    database_session: Annotated[AsyncSession, Depends(get_database_session)],
+    s3_client: Annotated[S3Client, Depends(get_s3_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    try:
+        deleted = await delete_document(
+            database_session=database_session,
+            s3_client=s3_client,
+            document_id=document_id,
+            bucket=settings.s3_bucket,
+        )
+    except (BotoCoreError, ClientError) as error:
+        logger.exception("Document deletion failed during storage cleanup")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is temporarily unavailable",
+        ) from error
+    except SQLAlchemyError as error:
+        logger.exception("Document deletion failed during database persistence")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document persistence is temporarily unavailable",
+        ) from error
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
