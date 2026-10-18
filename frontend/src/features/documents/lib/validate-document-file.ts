@@ -1,3 +1,5 @@
+export const maxDocumentSizeBytes = 20 * 1024 * 1024;
+
 export function validateDocumentFile(file: File): string | null {
   if (!file.name.toLowerCase().endsWith(".pdf")) {
     return "Choose a PDF document.";
@@ -13,6 +15,10 @@ export function validateDocumentFile(file: File): string | null {
 
   if (file.size === 0) {
     return "The selected document is empty. Choose a PDF with content.";
+  }
+
+  if (file.size > maxDocumentSizeBytes) {
+    return "The PDF must be 20 MB or smaller.";
   }
 
   return null;

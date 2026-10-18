@@ -2,13 +2,15 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import Button from "@/components/button";
 import DocumentDelete from "./document-delete";
 import type { DocumentPage } from "../api/list-documents";
 import { listDocuments } from "../api/list-documents";
 
 const pageSize = 10;
+const noticeDurationMs = 5000;
 const statusLabels = {
   uploaded: "Uploaded",
   processing: "Processing",
@@ -18,7 +20,15 @@ const statusLabels = {
 
 export default function DocumentList({ page, onPageChange }: { page: number; onPageChange: (page: number) => void }) {
   const queryClient = useQueryClient();
-  const [deletionMessage, setDeletionMessage] = useState("");
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [deletionNotice, setDeletionNotice] = useState<{ message: string } | null>(null);
+
+  useEffect(() => {
+    if (!deletionNotice) return;
+    heading.current?.focus();
+    const timer = setTimeout(() => setDeletionNotice(null), noticeDurationMs);
+    return () => clearTimeout(timer);
+  }, [deletionNotice]);
 
   async function handleDeleted(documentId: string) {
     await queryClient.cancelQueries({ queryKey: ["documents"] });
@@ -26,8 +36,9 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
       if (!cachedPage) return cachedPage;
       return { ...cachedPage, items: cachedPage.items.filter((item) => item.id !== documentId) };
     });
-    setDeletionMessage("Document deleted.");
-    onPageChange(0);
+    setDeletionNotice({ message: "Document deleted." });
+    const currentPage = queryClient.getQueryData<DocumentPage>(["documents", { limit: pageSize, offset: page * pageSize }]);
+    if (page > 0 && currentPage?.items.length === 0) onPageChange(page - 1);
     await queryClient.invalidateQueries({ queryKey: ["documents"] });
   }
 
@@ -41,18 +52,13 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
   return (
     <section aria-labelledby="saved-documents-heading" className="mt-10 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 id="saved-documents-heading" className="text-xl font-semibold">Saved documents</h2>
-        <button
-          type="button"
-          onClick={() => void documents.refetch()}
-          disabled={documents.isFetching}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 dark:border-zinc-700"
-        >
-          Refresh list
-        </button>
+        <h2 ref={heading} id="saved-documents-heading" tabIndex={-1} className="text-xl font-semibold focus:outline-none">Saved documents</h2>
+        <Button onClick={() => void documents.refetch()} disabled={documents.isFetching}>
+          {documents.isFetching && !documents.isLoading ? "Refreshing…" : "Refresh list"}
+        </Button>
       </div>
-      {deletionMessage && <p role="status" className="mt-4 text-sm">{deletionMessage}</p>}
-      {documents.isFetching && <p role="status" className="mt-4 text-sm">Loading documents…</p>}
+      {deletionNotice && <p role="status" className="mt-4 text-sm">{deletionNotice.message}</p>}
+      {documents.isLoading && <p role="status" className="mt-4 text-sm">Loading documents…</p>}
       {documents.isError && <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-400">Could not load the latest documents. Use Refresh list to try again.</p>}
       {documents.data && (
         <>
@@ -66,7 +72,7 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
                 <li key={document.id} className="py-5 first:pt-0">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h3 className="min-w-0 break-all font-medium">{document.original_filename}</h3>
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-800">{statusLabels[document.status]}</span>
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{statusLabels[document.status]}</span>
                   </div>
                   <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
                     <div><dt>Size</dt><dd>{document.size_bytes < 10000 ? "< 0.01" : new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(document.size_bytes / 1000000)} MB</dd></div>
@@ -80,9 +86,9 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
         </>
       )}
       <nav aria-label="Document pages" className="mt-6 flex items-center justify-between gap-3">
-        <button type="button" onClick={() => onPageChange(page - 1)} disabled={page === 0 || documents.isFetching} className="rounded-md border border-zinc-300 px-4 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 dark:border-zinc-700">Previous</button>
+        <Button onClick={() => onPageChange(page - 1)} disabled={page === 0 || documents.isFetching}>Previous</Button>
         <span className="text-sm">Page {page + 1}</span>
-        <button type="button" onClick={() => onPageChange(page + 1)} disabled={!documents.data?.has_more || documents.isFetching || documents.isError} className="rounded-md border border-zinc-300 px-4 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 dark:border-zinc-700">Next</button>
+        <Button onClick={() => onPageChange(page + 1)} disabled={!documents.data?.has_more || documents.isFetching || documents.isError}>Next</Button>
       </nav>
     </section>
   );

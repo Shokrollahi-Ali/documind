@@ -1,4 +1,4 @@
-import { getDocumentApiConfiguration } from "../../../../lib/server/document-api";
+import { getDocumentApiConfiguration } from "@/lib/server/document-api";
 
 export async function DELETE(
   request: Request,

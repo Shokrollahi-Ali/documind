@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
@@ -145,6 +146,62 @@ it("disables confirmation while deleting and refreshes the list on success", asy
   completeDeletion(new Response(null, { status: 204 }));
   expect(await screen.findByText("Document deleted.")).toBeInTheDocument();
   expect(await screen.findByText("No documents yet. Upload a PDF to get started.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Saved documents" })).toHaveFocus();
+});
+
+it("clears the deletion message after a few seconds", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, options: RequestInit) => Promise.resolve(
+    options.method === "DELETE" ? new Response(null, { status: 204 }) : pageResponse(),
+  )));
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+  expect(await screen.findByText("Document deleted.")).toBeInTheDocument();
+
+  act(() => vi.advanceTimersByTime(5000));
+  expect(screen.queryByText("Document deleted.")).not.toBeInTheDocument();
+});
+
+it("stays on the current page when documents remain after a deletion", async () => {
+  const user = userEvent.setup();
+  let deleted = false;
+  const other = { ...document, id: "2b0f8c1e-62a4-4c4e-9d0a-6f1f5f0a9a11", original_filename: "other.pdf" };
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options: RequestInit) => {
+    if (options.method === "DELETE") {
+      deleted = true;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (url.includes("offset=10")) return Promise.resolve(pageResponse(deleted ? [other] : [document, other], 10));
+    return Promise.resolve(pageResponse([{ ...document, id: "another-id", original_filename: "newer.pdf" }], 0, true));
+  }));
+  render(<DocumentWorkspace />);
+  await screen.findByRole("heading", { name: "newer.pdf" });
+  await user.click(screen.getByRole("button", { name: "Next" }));
+  await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
+  await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "saved.pdf" })).not.toBeInTheDocument());
+  expect(screen.getByRole("heading", { name: "other.pdf" })).toBeInTheDocument();
+  expect(screen.getByText("Page 2")).toBeInTheDocument();
+});
+
+it("shows a refreshing state instead of the loading message when refetching", async () => {
+  const user = userEvent.setup();
+  let completeRefresh!: (response: Response) => void;
+  vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce(pageResponse())
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { completeRefresh = resolve; })));
+  render(<DocumentWorkspace />);
+  await screen.findByRole("heading", { name: "saved.pdf" });
+
+  await user.click(screen.getByRole("button", { name: "Refresh list" }));
+  expect(screen.getByRole("button", { name: "Refreshing…" })).toBeDisabled();
+  expect(screen.queryByText("Loading documents…")).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "saved.pdf" })).toBeInTheDocument();
+  completeRefresh(pageResponse());
+  expect(await screen.findByRole("button", { name: "Refresh list" })).toBeEnabled();
 });
 
 it("keeps the document and shows an error when deletion fails", async () => {
@@ -160,7 +217,7 @@ it("keeps the document and shows an error when deletion fails", async () => {
   expect(screen.getByRole("button", { name: "Confirm deletion" })).toBeEnabled();
 });
 
-it("returns to the first page after deleting the last document on a later page", async () => {
+it("steps back a page after deleting the last document on a later page", async () => {
   const user = userEvent.setup();
   let deleted = false;
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, options: RequestInit) => {

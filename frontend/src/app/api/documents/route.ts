@@ -1,4 +1,4 @@
-import { getDocumentApiConfiguration, getDocumentsUrl } from "../../../lib/server/document-api";
+import { getDocumentApiConfiguration, getDocumentsUrl } from "@/lib/server/document-api";
 
 function getUploadConfiguration() {
   const url = getDocumentsUrl();
