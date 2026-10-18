@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager, closing
 
 from fastapi import FastAPI
 
+from documind.api.request_size import MULTIPART_OVERHEAD_BYTES, MaxBodySizeMiddleware
 from documind.api.router import api_router
 from documind.core.config import Settings
 from documind.db.session import create_database_engine, create_session_factory
@@ -34,6 +35,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = config
     app.include_router(api_router)
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_body_size=config.max_upload_size_bytes + MULTIPART_OVERHEAD_BYTES,
+    )
     return app
 
 
