@@ -10,7 +10,12 @@ def test_enables_documentation_in_development() -> None:
 
 
 def test_disables_documentation_in_production() -> None:
-    app = create_app(Settings(environment="production"))
+    app = create_app(
+        Settings(
+            environment="production",
+            database_url="postgresql+psycopg://documind:production-secret@db.internal/documind",
+        )
+    )
 
     assert app.docs_url is None
     assert app.openapi_url is None

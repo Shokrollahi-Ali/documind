@@ -1,7 +1,9 @@
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOCAL_DATABASE_PASSWORD = "documind-local-only"
 
 
 class Settings(BaseSettings):
@@ -14,7 +16,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     database_url: SecretStr = SecretStr(
-        "postgresql+psycopg://documind:documind-local-only@localhost:5432/documind"
+        f"postgresql+psycopg://documind:{LOCAL_DATABASE_PASSWORD}@localhost:5432/documind"
     )
     max_upload_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     s3_bucket: str = Field(default="documind-documents", min_length=1)
@@ -22,3 +24,15 @@ class Settings(BaseSettings):
     s3_endpoint_url: AnyHttpUrl | None = None
     s3_access_key_id: SecretStr | None = None
     s3_secret_access_key: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def reject_local_database_in_production(self) -> Self:
+        if (
+            self.environment == "production"
+            and LOCAL_DATABASE_PASSWORD in self.database_url.get_secret_value()
+        ):
+            raise ValueError(
+                "DOCUMIND_DATABASE_URL must be set to a production database "
+                "when DOCUMIND_ENVIRONMENT is production"
+            )
+        return self
