@@ -20,10 +20,16 @@ def test_creates_document_and_uploads_file() -> None:
         content_type="application/pdf",
         size_bytes=7,
     )
+    transaction_open_during_upload: list[bool] = []
+
+    async def record_upload(**_: object) -> None:
+        transaction_open_during_upload.append(database_session.begin.called)
+
     with BytesIO(b"content") as file:
         with patch(
             "documind.documents.service.upload_document_file",
             new_callable=AsyncMock,
+            side_effect=record_upload,
         ) as upload_file:
             document = asyncio.run(
                 create_document(
@@ -42,6 +48,7 @@ def test_creates_document_and_uploads_file() -> None:
             content_type="application/pdf",
         )
 
+    assert transaction_open_during_upload == [False]
     database_session.add.assert_called_once_with(document)
     database_session.flush.assert_awaited_once_with()
 
@@ -52,9 +59,10 @@ def test_creates_document_and_uploads_file() -> None:
     assert document.storage_key == f"documents/{document.id}.pdf"
 
 
-def test_does_not_upload_file_when_database_insert_fails() -> None:
+def test_cleans_up_file_when_database_insert_fails() -> None:
     database_session = MagicMock(spec=AsyncSession)
-    database_session.flush.side_effect = SQLAlchemyError("Database insert failed")
+    insert_error = SQLAlchemyError("Database insert failed")
+    database_session.flush.side_effect = insert_error
     s3_client = MagicMock()
     metadata = DocumentUploadMetadata(
         original_filename="document.pdf",
@@ -73,7 +81,7 @@ def test_does_not_upload_file_when_database_insert_fails() -> None:
                 new_callable=AsyncMock,
             ) as cleanup_file,
         ):
-            with pytest.raises(SQLAlchemyError, match="Database insert failed"):
+            with pytest.raises(SQLAlchemyError) as exception_info:
                 asyncio.run(
                     create_document(
                         database_session=database_session,
@@ -85,8 +93,14 @@ def test_does_not_upload_file_when_database_insert_fails() -> None:
                 )
 
         database_session.flush.assert_awaited_once_with()
-        upload_file.assert_not_called()
-        cleanup_file.assert_not_called()
+        upload_file.assert_awaited_once()
+        storage_key = upload_file.call_args.kwargs["storage_key"]
+        cleanup_file.assert_awaited_once_with(
+            s3_client,
+            "test-documents",
+            storage_key,
+        )
+        assert exception_info.value is insert_error
 
 
 def test_cleans_up_file_when_upload_fails() -> None:
@@ -122,12 +136,12 @@ def test_cleans_up_file_when_upload_fails() -> None:
 
         upload_file.assert_awaited_once()
         storage_key = upload_file.call_args.kwargs["storage_key"]
-        print("Storage key:", storage_key)
         cleanup_file.assert_awaited_once_with(
             s3_client,
             "test-documents",
             storage_key,
         )
+        database_session.begin.assert_not_called()
         assert exception_info.value is upload_error
 
 

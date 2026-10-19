@@ -49,22 +49,20 @@ async def create_document(
         size_bytes=metadata.size_bytes,
         status=DocumentStatus.UPLOADED,
     )
-    upload_attempted = False
     commit_started = False
 
     try:
+        await upload_document_file(
+            s3_client=s3_client,
+            file=file,
+            bucket=bucket,
+            storage_key=storage_key,
+            content_type=metadata.content_type,
+        )
+
         async with database_session.begin():
             database_session.add(document)
             await database_session.flush()
-
-            upload_attempted = True
-            await upload_document_file(
-                s3_client=s3_client,
-                file=file,
-                bucket=bucket,
-                storage_key=storage_key,
-                content_type=metadata.content_type,
-            )
             commit_started = True
 
     except Exception:
@@ -75,7 +73,7 @@ async def create_document(
                 document_id,
                 storage_key,
             )
-        elif upload_attempted:
+        else:
             await cleanup_uploaded_file(s3_client, bucket, storage_key)
 
         raise
