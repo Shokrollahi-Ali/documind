@@ -12,12 +12,17 @@ from documind.schemas.document_upload import DocumentUploadMetadata
 def validate_pdf_filename(filename: str | None) -> str:
     if filename is None or not filename.strip():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A filename is required"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="A filename is required"
         )
     if len(filename) > 255:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Filename must not exceed 255 characters",
+        )
+    if "\x00" in filename:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Filename must not contain null characters",
         )
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -33,7 +38,7 @@ def validate_upload_size(file: BinaryIO, max_size_bytes: int) -> int:
     file.seek(0)
     if size_bytes == 0:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The uploaded file is empty"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="The uploaded file is empty"
         )
     if size_bytes > max_size_bytes:
         raise HTTPException(
@@ -49,17 +54,17 @@ def validate_pdf_content(file: BinaryIO) -> None:
         reader = PdfReader(file, strict=True)
         if reader.is_encrypted:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Encrypted PDFs are not supported",
             )
         if len(reader.pages) == 0:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="The PDF must contain at least one page",
             )
     except PyPdfError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="The uploaded file could not be read as a valid PDF",
         ) from error
     finally:

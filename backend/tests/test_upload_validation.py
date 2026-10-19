@@ -31,6 +31,7 @@ def test_accepts_valid_pdf_filename(filename: str) -> None:
             422,
             "Filename must not exceed 255 characters",
         ),
+        ("docu\x00ment.pdf", 422, "Filename must not contain null characters"),
         ("document.txt", 415, "Only PDF files are supported"),
         ("document.pdf.exe", 415, "Only PDF files are supported"),
     ],
