@@ -110,10 +110,18 @@ async def delete_document(
         if document is None:
             return False
 
-        await delete_document_file(
-            s3_client=s3_client, bucket=bucket, storage_key=document.storage_key
-        )
-
+        storage_key = document.storage_key
         await database_session.delete(document)
+
+    try:
+        await delete_document_file(s3_client=s3_client, bucket=bucket, storage_key=storage_key)
+    except Exception:
+        logger.exception(
+            "Failed to delete stored file after deleting document: "
+            "document_id=%s, bucket=%s, key=%s",
+            document_id,
+            bucket,
+            storage_key,
+        )
 
     return True

@@ -24,8 +24,16 @@ def test_deletes_stored_file_and_database_record() -> None:
     database_session = MagicMock(spec=AsyncSession)
     database_session.get.return_value = document
     s3_client = MagicMock()
+    transaction = database_session.begin.return_value
+    committed_before_file_deletion: list[bool] = []
 
-    with patch("documind.documents.service.delete_document_file") as delete_file:
+    async def record_file_deletion(**_: object) -> None:
+        committed_before_file_deletion.append(transaction.__aexit__.called)
+
+    with patch(
+        "documind.documents.service.delete_document_file",
+        side_effect=record_file_deletion,
+    ) as delete_file:
         deleted = asyncio.run(
             delete_document(
                 database_session=database_session,
@@ -41,15 +49,14 @@ def test_deletes_stored_file_and_database_record() -> None:
         document_id,
         with_for_update=True,
     )
+    database_session.delete.assert_awaited_once_with(document)
+    transaction.__aexit__.assert_awaited_once_with(None, None, None)
     delete_file.assert_awaited_once_with(
         s3_client=s3_client,
         bucket="test-documents",
         storage_key=document.storage_key,
     )
-    database_session.delete.assert_awaited_once_with(document)
-
-    transaction = database_session.begin.return_value
-    transaction.__aexit__.assert_awaited_once_with(None, None, None)
+    assert committed_before_file_deletion == [True]
 
 
 def test_returns_false_when_document_does_not_exist() -> None:
@@ -78,7 +85,9 @@ def test_returns_false_when_document_does_not_exist() -> None:
     database_session.delete.assert_not_called()
 
 
-def test_does_not_delete_database_record_when_storage_deletion_fails() -> None:
+def test_keeps_database_deletion_when_storage_deletion_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     document_id = uuid4()
     document = Document(
         id=document_id,
@@ -97,30 +106,29 @@ def test_does_not_delete_database_record_when_storage_deletion_fails() -> None:
         "documind.documents.service.delete_document_file",
         side_effect=storage_error,
     ) as delete_file:
-        with pytest.raises(EndpointConnectionError) as exception_info:
-            asyncio.run(
-                delete_document(
-                    database_session=database_session,
-                    s3_client=s3_client,
-                    document_id=document_id,
-                    bucket="test-documents",
-                )
+        deleted = asyncio.run(
+            delete_document(
+                database_session=database_session,
+                s3_client=s3_client,
+                document_id=document_id,
+                bucket="test-documents",
             )
+        )
 
-    assert exception_info.value is storage_error
+    assert deleted is True
+    database_session.delete.assert_awaited_once_with(document)
+    transaction = database_session.begin.return_value
+    transaction.__aexit__.assert_awaited_once_with(None, None, None)
     delete_file.assert_awaited_once_with(
         s3_client=s3_client,
         bucket="test-documents",
         storage_key=document.storage_key,
     )
-    database_session.delete.assert_not_called()
-
-    transaction = database_session.begin.return_value
-    transaction.__aexit__.assert_awaited_once()
-    assert transaction.__aexit__.call_args.args[1] is storage_error
+    assert "Failed to delete stored file after deleting document" in caplog.text
+    assert document.storage_key in caplog.text
 
 
-def test_propagates_database_commit_failure_after_storage_deletion() -> None:
+def test_keeps_stored_file_when_database_commit_fails() -> None:
     document_id = uuid4()
     document = Document(
         id=document_id,
@@ -150,10 +158,6 @@ def test_propagates_database_commit_failure_after_storage_deletion() -> None:
             )
 
     assert exception_info.value is database_error
-    delete_file.assert_awaited_once_with(
-        s3_client=s3_client,
-        bucket="test-documents",
-        storage_key=document.storage_key,
-    )
+    delete_file.assert_not_called()
     database_session.delete.assert_awaited_once_with(document)
     transaction.__aexit__.assert_awaited_once_with(None, None, None)

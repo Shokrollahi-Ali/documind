@@ -132,12 +132,6 @@ async def remove_document(
             document_id=document_id,
             bucket=settings.s3_bucket,
         )
-    except (BotoCoreError, ClientError) as error:
-        logger.exception("Document deletion failed during storage cleanup")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document storage is temporarily unavailable",
-        ) from error
     except SQLAlchemyError as error:
         logger.exception("Document deletion failed during database persistence")
         raise HTTPException(

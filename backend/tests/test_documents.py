@@ -330,33 +330,16 @@ def test_delete_rejects_invalid_document_id(client: TestClient) -> None:
     delete_document.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("service_error", "expected_detail"),
-    [
-        (
-            EndpointConnectionError(endpoint_url="https://s3.example.com"),
-            "Document storage is temporarily unavailable",
-        ),
-        (
-            SQLAlchemyError("Internal database failure"),
-            "Document persistence is temporarily unavailable",
-        ),
-    ],
-)
-def test_delete_returns_service_unavailable(
-    client: TestClient,
-    service_error: Exception,
-    expected_detail: str,
-) -> None:
+def test_delete_returns_service_unavailable(client: TestClient) -> None:
     document_id = uuid4()
 
     with patch(
         "documind.api.documents.delete_document",
-        side_effect=service_error,
+        side_effect=SQLAlchemyError("Internal database failure"),
     ) as delete_document:
         response = client.delete(f"/documents/{document_id}")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": expected_detail}
+    assert response.json() == {"detail": "Document persistence is temporarily unavailable"}
     delete_document.assert_awaited_once()
     assert delete_document.call_args.kwargs["document_id"] == document_id
