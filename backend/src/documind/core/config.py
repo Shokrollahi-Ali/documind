@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         f"postgresql+psycopg://documind:{LOCAL_DATABASE_PASSWORD}@localhost:5432/documind"
     )
     max_upload_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    session_lifetime_seconds: int = Field(default=24 * 60 * 60, gt=0)
     s3_bucket: str = Field(default="documind-documents", min_length=1)
     s3_region: str = Field(default="us-east-1", min_length=1)
     s3_endpoint_url: AnyHttpUrl | None = None

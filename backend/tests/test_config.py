@@ -40,3 +40,20 @@ def test_allows_default_database_url_outside_production(environment: str) -> Non
     settings = Settings(_env_file=None, environment=environment)
 
     assert "documind-local-only" in settings.database_url.get_secret_value()
+
+
+@pytest.mark.parametrize("session_lifetime_seconds", [0, -1])
+def test_rejects_non_positive_session_lifetime(session_lifetime_seconds: int) -> None:
+    with pytest.raises(ValidationError, match="session_lifetime_seconds"):
+        Settings(
+            _env_file=None,
+            session_lifetime_seconds=session_lifetime_seconds,
+        )
+
+
+def test_reads_session_lifetime_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCUMIND_SESSION_LIFETIME_SECONDS", "3600")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.session_lifetime_seconds == 3600
