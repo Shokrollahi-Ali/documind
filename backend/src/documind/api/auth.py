@@ -1,14 +1,15 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.api.dependencies import get_current_user, get_settings
-from documind.api.routes import CURRENT_USER, LOGIN, REGISTER
+from documind.api.routes import CURRENT_USER, LOGIN, LOGOUT, REGISTER
 from documind.auth.login import InvalidCredentialsError, login_user
 from documind.auth.registration import EmailAlreadyRegisteredError, register_user
+from documind.auth.sessions import delete_auth_session
 from documind.core.config import Settings
 from documind.db.session import get_database_session
 from documind.models.user import User
@@ -96,3 +97,41 @@ async def current_user(
 ) -> UserResponse:
     response.headers["Cache-Control"] = "no-store"
     return UserResponse.model_validate(user)
+
+
+@router.post(
+    LOGOUT,
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def logout(
+    request: Request,
+    database_session: Annotated[AsyncSession, Depends(get_database_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    session_token = request.cookies.get(settings.session_cookie_name)
+
+    if session_token:
+        try:
+            await delete_auth_session(
+                database_session=database_session,
+                session_token=session_token,
+            )
+        except SQLAlchemyError as error:
+            logger.error("Logout database failure: %s", type(error).__name__)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Logout is temporarily unavailable",
+            ) from error
+
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        secure=settings.environment == "production",
+        httponly=True,
+        samesite="lax",
+    )
+    response.headers["Cache-Control"] = "no-store"
+
+    return response

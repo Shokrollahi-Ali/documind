@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from documind.auth.sessions import create_auth_session
+from documind.auth.sessions import create_auth_session, delete_auth_session
 from documind.auth.tokens import hash_session_token
 from documind.models.auth_session import AuthSession
 
@@ -40,6 +40,21 @@ def test_creates_session_with_hashed_token_and_expiration() -> None:
 
     database_session.flush.assert_awaited_once_with()
     database_session.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("failure_stage", ["delete", "commit"])
+def test_session_deletion_propagates_database_failure(failure_stage: str) -> None:
+    database_session = MagicMock(spec=AsyncSession)
+    database_error = SQLAlchemyError("Session deletion failed")
+    if failure_stage == "delete":
+        database_session.execute.side_effect = database_error
+    else:
+        database_session.begin.return_value.__aexit__.side_effect = database_error
+
+    with pytest.raises(SQLAlchemyError) as exception_info:
+        asyncio.run(delete_auth_session(database_session, "private-session-token"))
+
+    assert exception_info.value is database_error
 
 
 def test_does_not_return_token_when_session_insert_fails() -> None:

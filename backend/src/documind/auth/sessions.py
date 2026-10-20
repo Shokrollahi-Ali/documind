@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.auth.tokens import generate_session_token, hash_session_token
@@ -47,3 +47,14 @@ async def get_session_user(
 
     users = await database_session.scalars(statement)
     return users.one_or_none()
+
+
+async def delete_auth_session(
+    database_session: AsyncSession,
+    session_token: str,
+) -> None:
+    token_hash = hash_session_token(session_token)
+    statement = delete(AuthSession).where(AuthSession.token_hash == token_hash)
+
+    async with database_session.begin():
+        await database_session.execute(statement)

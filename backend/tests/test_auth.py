@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from http.cookies import SimpleCookie
 from typing import Literal, cast
 from unittest.mock import MagicMock, patch
@@ -319,5 +320,68 @@ def test_current_user_database_failure_returns_unavailable(
     assert response.status_code == 503
     assert response.json() == {"detail": "Authentication is temporarily unavailable"}
     assert "Authentication database failure" in caplog.text
+    assert "private-database-details" not in caplog.text
+    assert "private-token" not in caplog.text
+
+
+@pytest.mark.parametrize("environment", ["test", "production"])
+@pytest.mark.parametrize("session_token", [None, "", "private-token"])
+def test_logout_clears_configured_cookie(
+    client: TestClient,
+    environment: Literal["test", "production"],
+    session_token: str | None,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        environment=environment,
+        database_url="postgresql+psycopg://app:test-password@db.internal/documind",
+        session_cookie_name="custom_session",
+    )
+    application = cast(FastAPI, client.app)
+    application.dependency_overrides[get_settings] = lambda: settings
+    headers = {}
+    if session_token is not None:
+        headers["Cookie"] = f"custom_session={session_token}"
+
+    with patch("documind.api.auth.delete_auth_session") as delete_session:
+        response = client.post("/auth/logout", headers=headers)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert response.headers["Cache-Control"] == "no-store"
+    cookies = SimpleCookie()
+    cookies.load(response.headers["Set-Cookie"])
+    cookie = cookies[settings.session_cookie_name]
+    assert cookie.value == ""
+    assert cookie["max-age"] == "0"
+    assert parsedate_to_datetime(cookie["expires"]) <= datetime.now(UTC)
+    assert cookie["path"] == "/"
+    assert cookie["domain"] == ""
+    assert cookie["httponly"]
+    assert cookie["samesite"] == "lax"
+    assert bool(cookie["secure"]) == (environment == "production")
+    if session_token:
+        delete_session.assert_awaited_once()
+        assert delete_session.call_args.kwargs["session_token"] == session_token
+    else:
+        delete_session.assert_not_awaited()
+
+
+def test_logout_database_failure_does_not_report_success_or_clear_cookie(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    settings = cast(FastAPI, client.app).state.settings
+    with patch(
+        "documind.api.auth.delete_auth_session",
+        side_effect=SQLAlchemyError("private-database-details"),
+    ):
+        response = client.post(
+            "/auth/logout", headers={"Cookie": f"{settings.session_cookie_name}=private-token"}
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Logout is temporarily unavailable"}
+    assert "set-cookie" not in response.headers
+    assert "Logout database failure" in caplog.text
     assert "private-database-details" not in caplog.text
     assert "private-token" not in caplog.text

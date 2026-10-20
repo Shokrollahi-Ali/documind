@@ -217,3 +217,82 @@ def test_current_user_rejects_invalid_authentication(
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}
+
+
+def test_logout_revokes_only_current_session_and_prevents_token_reuse(
+    integration_client: TestClient,
+    integration_database_engine: Engine,
+    integration_settings: Settings,
+    registered_user: User,
+) -> None:
+    credentials = {"email": registered_user.email, "password": TEST_PASSWORD}
+    cookie_name = integration_settings.session_cookie_name
+    first_login = integration_client.post("/auth/login", json=credentials)
+    assert first_login.status_code == 200
+    first_token = first_login.cookies[cookie_name]
+    second_login = integration_client.post("/auth/login", json=credentials)
+    assert second_login.status_code == 200
+    second_token = second_login.cookies[cookie_name]
+    assert first_token != second_token
+
+    response = integration_client.post("/auth/logout")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert cookie_name not in integration_client.cookies
+    with Session(integration_database_engine) as database_session:
+        remaining_session = database_session.scalars(
+            select(AuthSession).where(AuthSession.user_id == registered_user.id)
+        ).one()
+        assert remaining_session.token_hash == hash_session_token(first_token)
+
+    assert integration_client.get("/auth/me").status_code == 401
+    replay_response = integration_client.get(
+        "/auth/me", headers={"Cookie": f"{cookie_name}={second_token}"}
+    )
+    assert replay_response.status_code == 401
+    other_session_response = integration_client.get(
+        "/auth/me", headers={"Cookie": f"{cookie_name}={first_token}"}
+    )
+    assert other_session_response.status_code == 200
+    assert other_session_response.json()["id"] == str(registered_user.id)
+
+    repeated_logout = integration_client.post(
+        "/auth/logout", headers={"Cookie": f"{cookie_name}={second_token}"}
+    )
+    assert repeated_logout.status_code == 204
+
+
+@pytest.mark.parametrize("expired", [False, True], ids=["unknown-session", "expired-session"])
+def test_logout_succeeds_for_unusable_session(
+    integration_client: TestClient,
+    integration_database_engine: Engine,
+    integration_settings: Settings,
+    registered_user: User,
+    expired: bool,
+) -> None:
+    cookie_name = integration_settings.session_cookie_name
+    token = "unknown-token"
+    if expired:
+        login_response = integration_client.post(
+            "/auth/login", json={"email": registered_user.email, "password": TEST_PASSWORD}
+        )
+        assert login_response.status_code == 200
+        token = login_response.cookies[cookie_name]
+        with Session(integration_database_engine) as database_session:
+            with database_session.begin():
+                database_session.execute(
+                    update(AuthSession)
+                    .where(AuthSession.user_id == registered_user.id)
+                    .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+                )
+
+    response = integration_client.post("/auth/logout", headers={"Cookie": f"{cookie_name}={token}"})
+
+    assert response.status_code == 204
+    assert cookie_name not in integration_client.cookies
+    with Session(integration_database_engine) as database_session:
+        sessions = database_session.scalars(
+            select(AuthSession).where(AuthSession.user_id == registered_user.id)
+        ).all()
+        assert sessions == []
