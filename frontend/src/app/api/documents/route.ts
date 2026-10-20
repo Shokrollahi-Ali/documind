@@ -1,4 +1,6 @@
 import { getDocumentApiConfiguration, getDocumentsUrl } from "@/lib/server/document-api";
+import { validateMutationOrigin } from "@/lib/server/request-origin";
+import { getSessionHeaders } from "@/lib/server/session-cookies";
 
 function getUploadConfiguration() {
   const url = getDocumentsUrl();
@@ -12,9 +14,14 @@ function getUploadConfiguration() {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const rejection = validateMutationOrigin(request);
+  if (rejection) return rejection;
+
   let configuration: ReturnType<typeof getUploadConfiguration>;
+  let headers: Headers;
   try {
     configuration = getUploadConfiguration();
+    headers = getSessionHeaders(request);
   } catch (error) {
     console.error("Invalid document upload configuration", error);
     return Response.json(
@@ -27,6 +34,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!contentType?.toLowerCase().startsWith("multipart/form-data;") || !request.body) {
     return Response.json({ detail: "A multipart file upload is required." }, { status: 415 });
   }
+  headers.set("Content-Type", contentType);
 
   const timeoutSignal = AbortSignal.timeout(configuration.timeoutMs);
   const signal = AbortSignal.any([request.signal, timeoutSignal]);
@@ -34,7 +42,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const options: RequestInit & { duplex: "half" } = {
       method: "POST",
-      headers: { "Content-Type": contentType },
+      headers,
       body: request.body,
       duplex: "half",
       signal,
@@ -71,8 +79,10 @@ export async function GET(request: Request): Promise<Response> {
 
   let url: URL;
   let timeoutMs: number;
+  let headers: Headers;
   try {
     ({ url, timeoutMs } = getDocumentApiConfiguration());
+    headers = getSessionHeaders(request);
   } catch (error) {
     console.error("Invalid document list configuration", error);
     return Response.json({ detail: "Document listing is not configured." }, { status: 503 });
@@ -84,6 +94,7 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const response = await fetch(url, {
+      headers,
       cache: "no-store",
       redirect: "error",
       signal: AbortSignal.any([request.signal, timeoutSignal]),

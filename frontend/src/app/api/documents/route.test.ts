@@ -8,13 +8,18 @@ function createUploadRequest() {
   return new Request("http://localhost:3000/api/documents", {
     method: "POST",
     body: formData,
-    headers: { Cookie: "private-cookie=value" },
+    headers: {
+      Origin: "http://localhost:3000",
+      Cookie: "private-cookie=value; documind_session=document-session",
+    },
   });
 }
 
 beforeEach(() => {
   vi.stubEnv("DOCUMIND_API_URL", "http://backend:8000/");
   vi.stubEnv("DOCUMIND_UPLOAD_TIMEOUT_MS", "120000");
+  vi.stubEnv("DOCUMIND_APP_ORIGIN", "");
+  vi.stubEnv("DOCUMIND_SESSION_COOKIE_NAME", "documind_session");
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -30,7 +35,7 @@ describe("document upload route", () => {
       expect(url.toString()).toBe("http://backend:8000/documents");
       expect(options.redirect).toBe("error");
       const request = new Request(url, options);
-      expect(request.headers.has("cookie")).toBe(false);
+      expect(request.headers.get("cookie")).toBe("documind_session=document-session");
       const formData = await request.formData();
       const file = formData.get("file") as File;
       expect(file.name).toBe("report.pdf");
@@ -47,7 +52,7 @@ describe("document upload route", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it.each([413, 415, 422, 503])("preserves backend rejection %i", async (status) => {
+  it.each([401, 413, 415, 422, 503])("preserves backend rejection %i", async (status) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "PDF rejected" }, { status })));
     const response = await POST(createUploadRequest());
     expect(response.status).toBe(status);
@@ -68,7 +73,9 @@ describe("document upload route", () => {
   });
 
   it("rejects non-multipart requests", async () => {
-    const request = new Request("http://localhost/api/documents", { method: "POST", body: "invalid" });
+    const request = new Request("http://localhost/api/documents", {
+      method: "POST", body: "invalid", headers: { Origin: "http://localhost" },
+    });
     expect((await POST(request)).status).toBe(415);
   });
 
@@ -97,10 +104,13 @@ describe("document list route", () => {
   it("forwards only validated pagination and disables caching", async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ items: [], has_more: false, limit: 10, offset: 20 }));
     vi.stubGlobal("fetch", fetchMock);
-    const response = await GET(new Request("http://localhost/api/documents?limit=10&offset=20&ignored=value"));
+    const response = await GET(new Request("http://localhost/api/documents?limit=10&offset=20&ignored=value", {
+      headers: { Cookie: "documind_session=list-session; private-cookie=value" },
+    }));
     expect(response.status).toBe(200);
     expect(fetchMock.mock.calls[0][0].toString()).toBe("http://backend:8000/documents?limit=10&offset=20");
     expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
+    expect(fetchMock.mock.calls[0][1].headers.get("cookie")).toBe("documind_session=list-session");
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
@@ -122,4 +132,13 @@ describe("document list route", () => {
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain("private error");
   });
+});
+
+it("rejects cross-origin uploads before forwarding cookies or files", async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const request = createUploadRequest();
+  request.headers.set("Origin", "https://untrusted.example");
+  expect((await POST(request)).status).toBe(403);
+  expect(fetchMock).not.toHaveBeenCalled();
 });

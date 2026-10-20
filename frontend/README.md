@@ -48,7 +48,19 @@ npm run dev
 
 The browser sends multipart data to the same-origin `/api/documents` route. Next.js streams the file to FastAPI's `/documents` endpoint, preserving backend validation errors. PostgreSQL, S3 storage, and FastAPI must be running. The backend remains responsible for upload size limits and actual PDF content validation. Browser checks are only early feedback.
 
-Uploads are never retried automatically because an interrupted response does not guarantee that the backend did not save the file. Deployment proxies must permit the configured upload size and duration. Authentication, document processing, and question answering are separate milestones.
+Uploads are never retried automatically because an interrupted response does not guarantee that the backend did not save the file. Deployment proxies must permit the configured upload size and duration. Authentication screens, document processing, and question answering are separate milestones.
+
+## Authentication proxy
+
+Next.js exposes `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, and `POST /api/auth/logout`. These routes forward requests to the corresponding FastAPI `/auth` endpoints. Register and login accept JSON bodies up to 16 KiB. Authentication responses are not cached, and requests are not retried automatically.
+
+The proxy preserves the backend session cookie and its attributes when logging in or out. Auth and document requests forward only the configured session cookie to FastAPI. Set `DOCUMIND_SESSION_COOKIE_NAME` to the same value in the frontend and backend; both default to `documind_session`. Configure the backend production environment to issue Secure cookies and serve the application over HTTPS.
+
+Set `DOCUMIND_APP_ORIGIN` to the public frontend origin, such as `http://localhost:3000` locally or `https://app.example.com` in production. This is required in production, including behind a reverse proxy. In development, an omitted value defaults to the request URL's origin. Restart Next.js after changing environment variables.
+
+All auth POST requests, document uploads, and document deletions require an `Origin` header matching that origin. Browser requests from the same frontend supply it automatically; HTTP scripts must supply it explicitly. Cross-origin mutations are rejected before reaching FastAPI. Deployments should keep FastAPI internal to the application network.
+
+This milestone provides the server-side connection. Registration, login, and session-aware screens are the next milestone; the existing document screen requires an authenticated session.
 
 ## Frontend checks
 
