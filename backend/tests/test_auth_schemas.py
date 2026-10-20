@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from documind.schemas.auth import RegisterRequest
+from documind.schemas.auth import LoginRequest, RegisterRequest
 
 
 def test_accepts_valid_registration() -> None:
@@ -50,3 +50,18 @@ def test_rejects_unexpected_registration_fields() -> None:
                 "role": "admin",
             }
         )
+
+
+@pytest.mark.parametrize("password_length", [1, 14, 128])
+def test_login_accepts_existing_passwords_within_its_limits(password_length: int) -> None:
+    password = "a" * password_length
+    request = LoginRequest(email="alice@example.com", password=password)
+
+    assert request.password.get_secret_value() == password
+
+
+def test_login_preserves_password_whitespace() -> None:
+    password = "  password with spaces  "
+    request = LoginRequest(email="alice@example.com", password=password)
+
+    assert request.password.get_secret_value() == password

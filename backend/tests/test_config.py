@@ -57,3 +57,16 @@ def test_reads_session_lifetime_from_environment(monkeypatch: pytest.MonkeyPatch
     settings = Settings(_env_file=None)
 
     assert settings.session_lifetime_seconds == 3600
+
+
+def test_reads_session_cookie_name_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCUMIND_SESSION_COOKIE_NAME", "custom_session")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.session_cookie_name == "custom_session"
+
+
+def test_rejects_empty_session_cookie_name() -> None:
+    with pytest.raises(ValidationError, match="session_cookie_name"):
+        Settings(_env_file=None, session_cookie_name="")
