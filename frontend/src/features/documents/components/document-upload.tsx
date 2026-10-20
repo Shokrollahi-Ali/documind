@@ -3,11 +3,12 @@
 import { useId, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
+import { SessionExpiredError } from "@/lib/client/session-expired";
 import Button from "@/components/button";
 import { uploadDocument } from "../api/upload-document";
 import { validateDocumentFile } from "../lib/validate-document-file";
 
-export default function DocumentUpload({ onUploaded }: { onUploaded?: () => void }) {
+export default function DocumentUpload({ onUploaded, onSessionExpired }: { onUploaded?: () => void; onSessionExpired?: () => void }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -56,6 +57,7 @@ export default function DocumentUpload({ onUploaded }: { onUploaded?: () => void
       setSelectedFile(null);
       if (inputRef.current) inputRef.current.value = "";
     } catch (uploadError) {
+      if (uploadError instanceof SessionExpiredError) onSessionExpired?.();
       setError(uploadError instanceof Error ? uploadError.message : "The upload failed.");
     } finally {
       uploadInProgress.current = false;

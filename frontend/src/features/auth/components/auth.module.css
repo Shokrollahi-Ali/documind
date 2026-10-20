@@ -1,0 +1,45 @@
+.shell {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.brand { font-size: 1rem; font-weight: 700; letter-spacing: -0.025em; }
+.card {
+  max-width: 29rem;
+  margin: 4rem auto 0;
+  padding: 2rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 1rem;
+}
+.card h1, .workspaceHeader h1 { font-size: 1.875rem; font-weight: 600; letter-spacing: -0.035em; }
+.eyebrow { margin-bottom: 0.75rem; font-size: 0.8rem; font-weight: 600; }
+.description, .help { color: color-mix(in srgb, var(--foreground) 72%, var(--background)); }
+.description { margin-top: 0.75rem; line-height: 1.6; }
+.fields { display: grid; gap: 0.75rem; min-width: 0; margin-top: 1.75rem; border: 0; }
+.fields label { font-size: 0.875rem; font-weight: 600; }
+.fields input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.7rem;
+  font-size: 1rem;
+}
+.fields input:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.fields button { margin-top: 0.5rem; }
+.help { font-size: 0.8rem; }
+.error { color: #b91c1c; font-size: 0.875rem; }
+.notice { margin-top: 1.25rem; line-height: 1.5; }
+.switchMode { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1.5rem; font-size: 0.875rem; }
+.workspaceHeader { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 2rem; }
+.account { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.account span { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .shell { padding: 1.5rem 1rem 3rem; }
+  .card { margin-top: 2rem; padding: 1.25rem; }
+}
+@media (prefers-color-scheme: dark) {
+  .error { color: #fca5a5; }
+}

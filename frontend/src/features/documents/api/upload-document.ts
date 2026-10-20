@@ -1,3 +1,4 @@
+import { checkSession } from "@/lib/client/session-expired";
 import { isDocumentMetadata } from "../lib/document";
 import type { DocumentMetadata } from "../lib/document";
 
@@ -27,6 +28,7 @@ export async function uploadDocument(file: File): Promise<DocumentMetadata> {
     throw new Error("The upload could not be confirmed. Check your connection before retrying; the document may have been saved.");
   }
 
+  checkSession(response);
   const payload: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {

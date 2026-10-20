@@ -1,3 +1,4 @@
+import { checkSession } from "@/lib/client/session-expired";
 import { isDocumentMetadata } from "../lib/document";
 import type { DocumentMetadata } from "../lib/document";
 
@@ -23,6 +24,7 @@ function isDocumentPage(value: unknown): value is DocumentPage {
 export async function listDocuments(limit: number, offset: number, signal: AbortSignal): Promise<DocumentPage> {
   const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   const response = await fetch(`/api/documents?${query}`, { signal, cache: "no-store" });
+  checkSession(response);
   if (!response.ok) throw new Error("Could not load your documents. Please try again.");
 
   const page: unknown = await response.json();

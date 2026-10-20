@@ -48,7 +48,7 @@ npm run dev
 
 The browser sends multipart data to the same-origin `/api/documents` route. Next.js streams the file to FastAPI's `/documents` endpoint, preserving backend validation errors. PostgreSQL, S3 storage, and FastAPI must be running. The backend remains responsible for upload size limits and actual PDF content validation. Browser checks are only early feedback.
 
-Uploads are never retried automatically because an interrupted response does not guarantee that the backend did not save the file. Deployment proxies must permit the configured upload size and duration. Authentication screens, document processing, and question answering are separate milestones.
+Uploads are never retried automatically because an interrupted response does not guarantee that the backend did not save the file. Deployment proxies must permit the configured upload size and duration. Document processing and question answering are separate milestones.
 
 ## Authentication proxy
 
@@ -60,7 +60,15 @@ Set `DOCUMIND_APP_ORIGIN` to the public frontend origin, such as `http://localho
 
 All auth POST requests, document uploads, and document deletions require an `Origin` header matching that origin. Browser requests from the same frontend supply it automatically; HTTP scripts must supply it explicitly. Cross-origin mutations are rejected before reaching FastAPI. Deployments should keep FastAPI internal to the application network.
 
-This milestone provides the server-side connection. Registration, login, and session-aware screens are the next milestone; the existing document screen requires an authenticated session.
+## Signing in
+
+The homepage checks the current session before mounting the document workspace. Signed-out users can sign in or create an account. Registration returns to sign-in with a confirmation message; it does not create a session automatically. Passwords must meet the backend's 15–128 character registration requirement.
+
+Signed-in users see their email and a sign-out button. Reloading restores the session through the HttpOnly cookie. The frontend keeps no session token in JavaScript or browser storage. Session checks also refresh when the tab becomes visible again. A 401 from a document request returns to sign-in; a failed session check instead offers a retry.
+
+Signing out or changing accounts unmounts the document workspace and clears its query cache and file selection. Failed sign-out requests display a retryable error. FastAPI remains responsible for enforcing authorization on every document operation.
+
+The authentication screens use CSS Modules. Component and API tests cover registration, sign-in/out, pending requests, validation errors, session failures, expiration, and account cache isolation.
 
 ## Frontend checks
 
