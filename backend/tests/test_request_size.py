@@ -5,10 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.api.dependencies import get_current_user
 from documind.api.request_size import MULTIPART_OVERHEAD_BYTES
 from documind.core.config import Settings
 from documind.db.session import get_database_session
 from documind.main import create_app
+from documind.models.user import User
 
 MAX_UPLOAD_SIZE_BYTES = 1024
 MAX_BODY_SIZE_BYTES = MAX_UPLOAD_SIZE_BYTES + MULTIPART_OVERHEAD_BYTES
@@ -16,7 +18,7 @@ TOO_LARGE_DETAIL = f"Request body must not exceed {MAX_BODY_SIZE_BYTES} bytes"
 
 
 @pytest.fixture
-def client(s3_client_factory: MagicMock) -> Iterator[TestClient]:
+def client(s3_client_factory: MagicMock, current_user: User) -> Iterator[TestClient]:
     settings = Settings(
         environment="test",
         s3_bucket="test-documents",
@@ -25,6 +27,7 @@ def client(s3_client_factory: MagicMock) -> Iterator[TestClient]:
     application = create_app(settings)
     database_session = MagicMock(spec=AsyncSession)
     application.dependency_overrides[get_database_session] = lambda: database_session
+    application.dependency_overrides[get_current_user] = lambda: current_user
 
     with TestClient(application) as test_client:
         yield test_client

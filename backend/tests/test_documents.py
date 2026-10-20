@@ -1,24 +1,28 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from io import BytesIO
+from typing import cast
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from botocore.exceptions import EndpointConnectionError
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from documind.api.dependencies import get_current_user
 from documind.core.config import Settings
 from documind.db.session import get_database_session
 from documind.main import create_app
 from documind.models.document import Document, DocumentStatus
+from documind.models.user import User
 
 
 @pytest.fixture
-def client(s3_client_factory: MagicMock) -> Iterator[TestClient]:
+def client(s3_client_factory: MagicMock, current_user: User) -> Iterator[TestClient]:
     settings = Settings(
         environment="test",
         s3_bucket="test-documents",
@@ -27,6 +31,7 @@ def client(s3_client_factory: MagicMock) -> Iterator[TestClient]:
     application = create_app(settings)
     database_session = MagicMock(spec=AsyncSession)
     application.dependency_overrides[get_database_session] = lambda: database_session
+    application.dependency_overrides[get_current_user] = lambda: current_user
 
     with TestClient(application) as test_client:
         yield test_client
@@ -45,10 +50,12 @@ def pdf_content() -> bytes:
 def test_upload_returns_created_document(
     client: TestClient,
     pdf_content: bytes,
+    current_user: User,
 ) -> None:
     document_id = uuid4()
     document = Document(
         id=document_id,
+        owner_id=current_user.id,
         original_filename="document.pdf",
         storage_key=f"documents/{document_id}.pdf",
         content_type="application/pdf",
@@ -79,6 +86,7 @@ def test_upload_returns_created_document(
     create_document.assert_awaited_once()
     arguments = create_document.call_args.kwargs
     assert arguments["bucket"] == "test-documents"
+    assert arguments["owner_id"] == current_user.id
     assert arguments["metadata"].original_filename == "document.pdf"
     assert arguments["metadata"].size_bytes == len(pdf_content)
     assert arguments["file"].closed
@@ -153,10 +161,11 @@ def test_returns_service_unavailable_when_document_creation_fails(
     assert create_document.call_args.kwargs["file"].closed
 
 
-def test_get_returns_document(client: TestClient) -> None:
+def test_get_returns_document(client: TestClient, current_user: User) -> None:
     document_id = uuid4()
     document = Document(
         id=document_id,
+        owner_id=current_user.id,
         original_filename="document.pdf",
         storage_key=f"documents/{document_id}.pdf",
         content_type="application/pdf",
@@ -182,6 +191,7 @@ def test_get_returns_document(client: TestClient) -> None:
     }
 
     get_document.assert_awaited_once()
+    assert get_document.call_args.kwargs["owner_id"] == current_user.id
     assert get_document.call_args.kwargs["document_id"] == document_id
 
 
@@ -231,10 +241,11 @@ def test_get_returns_service_unavailable_when_database_fails(
     assert get_document.call_args.kwargs["document_id"] == document_id
 
 
-def test_list_returns_paginated_documents(client: TestClient) -> None:
+def test_list_returns_paginated_documents(client: TestClient, current_user: User) -> None:
     documents = [
         Document(
             id=uuid4(),
+            owner_id=current_user.id,
             original_filename=f"document-{index}.pdf",
             storage_key=f"documents/{uuid4()}.pdf",
             content_type="application/pdf",
@@ -257,6 +268,7 @@ def test_list_returns_paginated_documents(client: TestClient) -> None:
     service.assert_awaited_once()
     assert service.call_args.kwargs["limit"] == 3
     assert service.call_args.kwargs["offset"] == 4
+    assert service.call_args.kwargs["owner_id"] == current_user.id
 
 
 def test_list_returns_empty_page(client: TestClient) -> None:
@@ -284,7 +296,7 @@ def test_list_returns_service_unavailable_on_database_failure(client: TestClient
     assert response.json() == {"detail": "Document persistence is temporarily unavailable"}
 
 
-def test_delete_returns_no_content(client: TestClient) -> None:
+def test_delete_returns_no_content(client: TestClient, current_user: User) -> None:
     document_id = uuid4()
 
     with patch(
@@ -300,6 +312,7 @@ def test_delete_returns_no_content(client: TestClient) -> None:
     arguments = delete_document.call_args.kwargs
     assert arguments["document_id"] == document_id
     assert arguments["bucket"] == "test-documents"
+    assert arguments["owner_id"] == current_user.id
 
 
 def test_delete_returns_not_found_when_document_is_missing(
@@ -343,3 +356,49 @@ def test_delete_returns_service_unavailable(client: TestClient) -> None:
     assert response.json() == {"detail": "Document persistence is temporarily unavailable"}
     delete_document.assert_awaited_once()
     assert delete_document.call_args.kwargs["document_id"] == document_id
+
+
+@pytest.mark.parametrize("operation", ["upload", "list", "retrieve", "delete"])
+@pytest.mark.parametrize("authentication", ["missing", "invalid", "database-error"])
+def test_document_operations_require_valid_authentication(
+    client: TestClient, pdf_content: bytes, operation: str, authentication: str
+) -> None:
+    application = cast(FastAPI, client.app)
+    application.dependency_overrides.pop(get_current_user)
+    headers = {}
+    if authentication != "missing":
+        headers["Cookie"] = f"{application.state.settings.session_cookie_name}=invalid-token"
+
+    with (
+        patch("documind.api.dependencies.get_session_user", return_value=None) as lookup,
+        patch("documind.api.documents.create_document") as create_document,
+        patch("documind.api.documents.list_documents") as list_documents,
+        patch("documind.api.documents.get_document") as get_document,
+        patch("documind.api.documents.delete_document") as delete_document,
+    ):
+        if authentication == "database-error":
+            lookup.side_effect = SQLAlchemyError("Authentication database unavailable")
+
+        if operation == "upload":
+            response = client.post(
+                "/documents",
+                headers=headers,
+                files={"file": ("document.pdf", pdf_content, "application/pdf")},
+            )
+        elif operation == "list":
+            response = client.get("/documents", headers=headers)
+        elif operation == "retrieve":
+            response = client.get(f"/documents/{uuid4()}", headers=headers)
+        else:
+            response = client.delete(f"/documents/{uuid4()}", headers=headers)
+
+    if authentication == "database-error":
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Authentication is temporarily unavailable"}
+    else:
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Authentication required"}
+    create_document.assert_not_awaited()
+    list_documents.assert_not_awaited()
+    get_document.assert_not_awaited()
+    delete_document.assert_not_awaited()

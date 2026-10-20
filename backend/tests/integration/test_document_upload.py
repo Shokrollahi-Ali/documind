@@ -18,7 +18,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_uploaded_document_can_be_retrieved_and_deleted(
-    integration_client: TestClient,
+    authenticated_client: TestClient,
     integration_database_engine: Engine,
     integration_s3_client: "S3Client",
     integration_settings: Settings,
@@ -27,9 +27,12 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
     filename = f"integration-{uuid4()}.pdf"
     bucket = integration_settings.s3_bucket
     storage_key: str | None = None
+    current_user = authenticated_client.get("/auth/me")
+    assert current_user.status_code == 200
+    owner_id = UUID(current_user.json()["id"])
 
     try:
-        response = integration_client.post(
+        response = authenticated_client.post(
             "/documents",
             files={"file": (filename, pdf_content, "application/pdf")},
         )
@@ -48,6 +51,7 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
             document = session.get(Document, document_id)
 
             assert document is not None
+            assert document.owner_id == owner_id
             assert document.original_filename == filename
             assert document.content_type == "application/pdf"
             assert document.size_bytes == len(pdf_content)
@@ -65,12 +69,12 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
             assert body.read() == pdf_content
 
         assert stored_file["ContentType"] == "application/pdf"
-        retrieval_response = integration_client.get(f"/documents/{document_id}")
+        retrieval_response = authenticated_client.get(f"/documents/{document_id}")
 
         assert retrieval_response.status_code == 200, retrieval_response.text
         assert retrieval_response.json() == response_data
 
-        deletion_response = integration_client.delete(f"/documents/{document_id}")
+        deletion_response = authenticated_client.delete(f"/documents/{document_id}")
 
         assert deletion_response.status_code == 204, deletion_response.text
         assert deletion_response.content == b""
@@ -86,8 +90,8 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
 
         assert exception_info.value.response["ResponseMetadata"]["HTTPStatusCode"] == 404
 
-        assert integration_client.get(f"/documents/{document_id}").status_code == 404
-        assert integration_client.delete(f"/documents/{document_id}").status_code == 404
+        assert authenticated_client.get(f"/documents/{document_id}").status_code == 404
+        assert authenticated_client.delete(f"/documents/{document_id}").status_code == 404
     finally:
         if storage_key is not None:
             integration_s3_client.delete_object(

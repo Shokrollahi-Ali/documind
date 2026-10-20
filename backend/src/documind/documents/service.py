@@ -38,11 +38,13 @@ async def create_document(
     file: BinaryIO,
     metadata: DocumentUploadMetadata,
     bucket: str,
+    owner_id: UUID,
 ) -> Document:
     document_id = uuid4()
     storage_key = f"documents/{document_id}.pdf"
     document = Document(
         id=document_id,
+        owner_id=owner_id,
         original_filename=metadata.original_filename,
         storage_key=storage_key,
         content_type=metadata.content_type,
@@ -81,13 +83,29 @@ async def create_document(
     return document
 
 
-async def get_document(database_session: AsyncSession, document_id: UUID) -> Document | None:
-    return await database_session.get(Document, document_id)
+async def get_document(
+    database_session: AsyncSession,
+    document_id: UUID,
+    owner_id: UUID,
+) -> Document | None:
+    statement = select(Document).where(
+        Document.id == document_id,
+        Document.owner_id == owner_id,
+    )
+
+    documents = await database_session.scalars(statement)
+    return documents.one_or_none()
 
 
-async def list_documents(database_session: AsyncSession, limit: int, offset: int) -> list[Document]:
+async def list_documents(
+    database_session: AsyncSession,
+    limit: int,
+    offset: int,
+    owner_id: UUID,
+) -> list[Document]:
     statement = (
         select(Document)
+        .where(Document.owner_id == owner_id)
         .order_by(Document.created_at.desc(), Document.id.desc())
         .offset(offset)
         .limit(limit)
@@ -98,14 +116,20 @@ async def list_documents(database_session: AsyncSession, limit: int, offset: int
 
 
 async def delete_document(
-    database_session: AsyncSession, s3_client: S3Client, document_id: UUID, bucket: str
+    database_session: AsyncSession,
+    s3_client: S3Client,
+    document_id: UUID,
+    bucket: str,
+    owner_id: UUID,
 ) -> bool:
     async with database_session.begin():
-        document = await database_session.get(
-            Document,
-            document_id,
-            with_for_update=True,
+        statement = (
+            select(Document)
+            .where(Document.id == document_id, Document.owner_id == owner_id)
+            .with_for_update()
         )
+        documents = await database_session.scalars(statement)
+        document = documents.one_or_none()
 
         if document is None:
             return False

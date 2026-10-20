@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Enum, String, func
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from documind.db.base import Base
@@ -20,6 +20,7 @@ class Document(Base):
     __table_args__ = (CheckConstraint("size_bytes > 0", name="positive_size"),)
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str] = mapped_column(String(1024), unique=True)
     content_type: Mapped[str] = mapped_column(String(255))

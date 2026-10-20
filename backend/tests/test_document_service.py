@@ -1,6 +1,7 @@
 import asyncio
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
 import pytest
 from botocore.exceptions import EndpointConnectionError
@@ -12,7 +13,12 @@ from documind.models.document import DocumentStatus
 from documind.schemas.document_upload import DocumentUploadMetadata
 
 
-def test_creates_document_and_uploads_file() -> None:
+@pytest.fixture
+def owner_id() -> UUID:
+    return uuid4()
+
+
+def test_creates_document_and_uploads_file(owner_id: UUID) -> None:
     database_session = MagicMock(spec=AsyncSession)
     s3_client = MagicMock()
     metadata = DocumentUploadMetadata(
@@ -33,6 +39,7 @@ def test_creates_document_and_uploads_file() -> None:
         ) as upload_file:
             document = asyncio.run(
                 create_document(
+                    owner_id=owner_id,
                     database_session=database_session,
                     s3_client=s3_client,
                     file=file,
@@ -52,6 +59,7 @@ def test_creates_document_and_uploads_file() -> None:
     database_session.add.assert_called_once_with(document)
     database_session.flush.assert_awaited_once_with()
 
+    assert document.owner_id == owner_id
     assert document.original_filename == "document.pdf"
     assert document.content_type == "application/pdf"
     assert document.size_bytes == 7
@@ -59,7 +67,7 @@ def test_creates_document_and_uploads_file() -> None:
     assert document.storage_key == f"documents/{document.id}.pdf"
 
 
-def test_cleans_up_file_when_database_insert_fails() -> None:
+def test_cleans_up_file_when_database_insert_fails(owner_id: UUID) -> None:
     database_session = MagicMock(spec=AsyncSession)
     insert_error = SQLAlchemyError("Database insert failed")
     database_session.flush.side_effect = insert_error
@@ -84,6 +92,7 @@ def test_cleans_up_file_when_database_insert_fails() -> None:
             with pytest.raises(SQLAlchemyError) as exception_info:
                 asyncio.run(
                     create_document(
+                        owner_id=owner_id,
                         database_session=database_session,
                         s3_client=s3_client,
                         file=file,
@@ -103,7 +112,7 @@ def test_cleans_up_file_when_database_insert_fails() -> None:
         assert exception_info.value is insert_error
 
 
-def test_cleans_up_file_when_upload_fails() -> None:
+def test_cleans_up_file_when_upload_fails(owner_id: UUID) -> None:
     database_session = MagicMock(spec=AsyncSession)
     s3_client = MagicMock()
     metadata = DocumentUploadMetadata(
@@ -126,6 +135,7 @@ def test_cleans_up_file_when_upload_fails() -> None:
             with pytest.raises(EndpointConnectionError) as exception_info:
                 asyncio.run(
                     create_document(
+                        owner_id=owner_id,
                         database_session=database_session,
                         s3_client=s3_client,
                         file=file,
@@ -145,7 +155,7 @@ def test_cleans_up_file_when_upload_fails() -> None:
         assert exception_info.value is upload_error
 
 
-def test_keeps_uploaded_file_when_database_commit_fails() -> None:
+def test_keeps_uploaded_file_when_database_commit_fails(owner_id: UUID) -> None:
     database_session = MagicMock(spec=AsyncSession)
     transaction = database_session.begin.return_value
     commit_error = SQLAlchemyError("Database commit failed")
@@ -170,6 +180,7 @@ def test_keeps_uploaded_file_when_database_commit_fails() -> None:
             with pytest.raises(SQLAlchemyError) as exception_info:
                 asyncio.run(
                     create_document(
+                        owner_id=owner_id,
                         database_session=database_session,
                         s3_client=s3_client,
                         file=file,
@@ -186,6 +197,7 @@ def test_keeps_uploaded_file_when_database_commit_fails() -> None:
 
 def test_preserves_upload_error_when_cleanup_fails(
     caplog: pytest.LogCaptureFixture,
+    owner_id: UUID,
 ) -> None:
     database_session = MagicMock(spec=AsyncSession)
     s3_client = MagicMock()
@@ -211,6 +223,7 @@ def test_preserves_upload_error_when_cleanup_fails(
             with pytest.raises(EndpointConnectionError) as exception_info:
                 asyncio.run(
                     create_document(
+                        owner_id=owner_id,
                         database_session=database_session,
                         s3_client=s3_client,
                         file=file,

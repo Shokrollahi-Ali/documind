@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFi
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from documind.api.dependencies import get_settings
+from documind.api.dependencies import get_current_user, get_settings
 from documind.api.routes import DOCUMENT_ID, DOCUMENTS
 from documind.api.upload_validation import validate_document_upload
 from documind.core.config import Settings
@@ -21,6 +21,7 @@ from documind.documents.service import (
     get_document,
     list_documents,
 )
+from documind.models.user import User
 from documind.schemas.document import DocumentListResponse, DocumentResponse
 from documind.storage.s3 import get_s3_client
 
@@ -37,6 +38,7 @@ router = APIRouter(tags=["documents"])
 @router.post(DOCUMENTS, response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile,
+    user: Annotated[User, Depends(get_current_user)],
     database_session: Annotated[AsyncSession, Depends(get_database_session)],
     s3_client: Annotated[S3Client, Depends(get_s3_client)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -47,6 +49,7 @@ async def upload_document(
 
         try:
             document = await create_document(
+                owner_id=user.id,
                 database_session=database_session,
                 s3_client=s3_client,
                 file=file.file,
@@ -73,10 +76,16 @@ async def upload_document(
 
 @router.get(DOCUMENT_ID, response_model=DocumentResponse)
 async def retrieve_document(
-    document_id: UUID, database_session: Annotated[AsyncSession, Depends(get_database_session)]
+    document_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    database_session: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> DocumentResponse:
     try:
-        document = await get_document(database_session=database_session, document_id=document_id)
+        document = await get_document(
+            database_session=database_session,
+            document_id=document_id,
+            owner_id=user.id,
+        )
     except SQLAlchemyError as error:
         logger.exception("Document retrieval failed during database lookup")
         raise HTTPException(
@@ -95,13 +104,17 @@ async def retrieve_document(
 
 @router.get(DOCUMENTS, response_model=DocumentListResponse)
 async def retrieve_documents(
+    user: Annotated[User, Depends(get_current_user)],
     database_session: Annotated[AsyncSession, Depends(get_database_session)],
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DocumentListResponse:
     try:
         documents = await list_documents(
-            database_session=database_session, limit=limit + 1, offset=offset
+            owner_id=user.id,
+            database_session=database_session,
+            limit=limit + 1,
+            offset=offset,
         )
     except SQLAlchemyError as error:
         logger.exception("Document listing failed during database lookup")
@@ -121,12 +134,14 @@ async def retrieve_documents(
 @router.delete(DOCUMENT_ID, status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def remove_document(
     document_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
     database_session: Annotated[AsyncSession, Depends(get_database_session)],
     s3_client: Annotated[S3Client, Depends(get_s3_client)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     try:
         deleted = await delete_document(
+            owner_id=user.id,
             database_session=database_session,
             s3_client=s3_client,
             document_id=document_id,
