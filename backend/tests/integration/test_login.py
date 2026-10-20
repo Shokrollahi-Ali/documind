@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, delete, select
+from sqlalchemy import Engine, delete, select, update
 from sqlalchemy.orm import Session
 
 from documind.auth.login import InvalidCredentialsError, LoginResult, login_user
@@ -138,6 +138,11 @@ def test_login_endpoint_issues_cookie_for_committed_session(
     token = response.cookies[integration_settings.session_cookie_name]
     assert token not in response.text
 
+    current_user_response = integration_client.get("/auth/me")
+    assert current_user_response.status_code == 200
+    assert current_user_response.json() == response.json()
+    assert current_user_response.headers["Cache-Control"] == "no-store"
+
     with Session(integration_database_engine) as database_session:
         auth_session = database_session.scalars(
             select(AuthSession).where(AuthSession.user_id == registered_user.id)
@@ -170,3 +175,45 @@ def test_login_endpoint_rejects_invalid_credentials_without_session(
             select(AuthSession).where(AuthSession.user_id == registered_user.id)
         ).all()
         assert sessions == []
+
+
+@pytest.mark.parametrize(
+    "session_state", ["missing", "unknown", "expired", "deleted-session", "deleted-user"]
+)
+def test_current_user_rejects_invalid_authentication(
+    integration_client: TestClient,
+    integration_database_engine: Engine,
+    integration_settings: Settings,
+    registered_user: User,
+    session_state: str,
+) -> None:
+    login_response = integration_client.post(
+        "/auth/login", json={"email": registered_user.email, "password": TEST_PASSWORD}
+    )
+    assert login_response.status_code == 200
+
+    if session_state == "missing":
+        integration_client.cookies.clear()
+    elif session_state == "unknown":
+        integration_client.cookies.clear()
+        integration_client.cookies.set(integration_settings.session_cookie_name, "unknown-token")
+    else:
+        with Session(integration_database_engine) as database_session:
+            with database_session.begin():
+                if session_state == "expired":
+                    database_session.execute(
+                        update(AuthSession)
+                        .where(AuthSession.user_id == registered_user.id)
+                        .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+                    )
+                elif session_state == "deleted-session":
+                    database_session.execute(
+                        delete(AuthSession).where(AuthSession.user_id == registered_user.id)
+                    )
+                else:
+                    database_session.execute(delete(User).where(User.id == registered_user.id))
+
+    response = integration_client.get("/auth/me")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}

@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from documind.api.dependencies import get_settings
-from documind.api.routes import LOGIN, REGISTER
+from documind.api.dependencies import get_current_user, get_settings
+from documind.api.routes import CURRENT_USER, LOGIN, REGISTER
 from documind.auth.login import InvalidCredentialsError, login_user
 from documind.auth.registration import EmailAlreadyRegisteredError, register_user
 from documind.core.config import Settings
 from documind.db.session import get_database_session
+from documind.models.user import User
 from documind.schemas.auth import LoginRequest, RegisterRequest, UserResponse
 
 logger = logging.getLogger(__name__)
@@ -86,3 +87,12 @@ async def login(
     response.headers["Cache-Control"] = "no-store"
 
     return user_response
+
+
+@router.get(CURRENT_USER, response_model=UserResponse)
+async def current_user(
+    response: Response,
+    user: Annotated[User, Depends(get_current_user)],
+) -> UserResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return UserResponse.model_validate(user)

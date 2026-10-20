@@ -252,3 +252,72 @@ def test_invalid_login_request_does_not_call_service(
     assert response.status_code == 422
     assert "set-cookie" not in response.headers
     login_user.assert_not_awaited()
+
+
+def test_current_user_reads_configured_cookie_and_returns_public_fields(client: TestClient) -> None:
+    settings = Settings(_env_file=None, environment="test", session_cookie_name="custom_session")
+    application = cast(FastAPI, client.app)
+    application.dependency_overrides[get_settings] = lambda: settings
+    user = User(
+        id=uuid4(),
+        email="alice@example.com",
+        password_hash="private-password-hash",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    with patch("documind.api.dependencies.get_session_user", return_value=user) as lookup:
+        response = client.get("/auth/me", headers={"Cookie": "custom_session=private-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(user.id),
+        "email": user.email,
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    assert response.headers["Cache-Control"] == "no-store"
+    lookup.assert_awaited_once()
+    assert lookup.call_args.kwargs["session_token"] == "private-token"
+    database_session = lookup.call_args.kwargs["database_session"]
+    database_session.begin.return_value.__aexit__.assert_awaited_once_with(None, None, None)
+
+
+@pytest.mark.parametrize("cookie_header", ["", "documind_session=", "unrelated=value"])
+def test_current_user_rejects_missing_cookie_without_lookup(
+    client: TestClient, cookie_header: str
+) -> None:
+    with patch("documind.api.dependencies.get_session_user") as lookup:
+        response = client.get("/auth/me", headers={"Cookie": cookie_header})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+    lookup.assert_not_awaited()
+
+
+def test_current_user_rejects_invalid_session(client: TestClient) -> None:
+    settings = cast(FastAPI, client.app).state.settings
+    with patch("documind.api.dependencies.get_session_user", return_value=None):
+        response = client.get(
+            "/auth/me", headers={"Cookie": f"{settings.session_cookie_name}=invalid-token"}
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+def test_current_user_database_failure_returns_unavailable(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    settings = cast(FastAPI, client.app).state.settings
+    with patch(
+        "documind.api.dependencies.get_session_user",
+        side_effect=SQLAlchemyError("private-database-details"),
+    ):
+        response = client.get(
+            "/auth/me", headers={"Cookie": f"{settings.session_cookie_name}=private-token"}
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is temporarily unavailable"}
+    assert "Authentication database failure" in caplog.text
+    assert "private-database-details" not in caplog.text
+    assert "private-token" not in caplog.text
