@@ -1,4 +1,6 @@
+import asyncio
 from contextlib import closing
+from tempfile import TemporaryFile
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -10,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from documind.core.config import Settings
 from documind.models.document import Document, DocumentStatus
+from documind.storage.s3 import download_document_file
 
 if TYPE_CHECKING:
     from mypy_boto3_s3 import S3Client
@@ -69,6 +72,19 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
             assert body.read() == pdf_content
 
         assert stored_file["ContentType"] == "application/pdf"
+
+        with TemporaryFile(mode="w+b") as downloaded_file:
+            asyncio.run(
+                download_document_file(
+                    s3_client=integration_s3_client,
+                    file=downloaded_file,
+                    bucket=bucket,
+                    storage_key=storage_key,
+                )
+            )
+            downloaded_file.seek(0)
+            assert downloaded_file.read() == pdf_content
+
         retrieval_response = authenticated_client.get(f"/documents/{document_id}")
 
         assert retrieval_response.status_code == 200, retrieval_response.text

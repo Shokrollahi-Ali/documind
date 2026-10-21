@@ -70,3 +70,17 @@ async def delete_document_file(
     storage_key: str,
 ) -> None:
     await run_in_threadpool(s3_client.delete_object, Bucket=bucket, Key=storage_key)
+
+
+async def download_document_file(
+    s3_client: S3Client,
+    file: BinaryIO,
+    bucket: str,
+    storage_key: str,
+) -> None:
+    await run_in_threadpool(
+        s3_client.download_fileobj,
+        Bucket=bucket,
+        Key=storage_key,
+        Fileobj=file,
+    )
