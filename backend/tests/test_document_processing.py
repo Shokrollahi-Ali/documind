@@ -1,6 +1,7 @@
 import asyncio
 from typing import BinaryIO
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from botocore.exceptions import EndpointConnectionError
@@ -10,7 +11,10 @@ from documind.documents.extraction import (
     NoExtractableTextError,
     PdfExtractionError,
 )
-from documind.documents.processing import extract_stored_document
+from documind.documents.processing import (
+    extract_and_store_document_pages,
+    extract_stored_document,
+)
 
 
 def test_download_failure_closes_temporary_file() -> None:
@@ -128,3 +132,45 @@ def test_extraction_failure_closes_temporary_file(error: PdfExtractionError) -> 
     temporary_file = download_file.call_args.kwargs["file"]
     extract_pages.assert_called_once_with(temporary_file)
     assert temporary_file.closed
+
+
+def test_inaccessible_document_skips_extraction_and_storage() -> None:
+    session_factory = MagicMock()
+    s3_client = MagicMock()
+    document_id = uuid4()
+    owner_id = uuid4()
+
+    with (
+        patch(
+            "documind.documents.processing.get_document",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as get_document,
+        patch(
+            "documind.documents.processing.extract_stored_document",
+            new_callable=AsyncMock,
+        ) as extract_document,
+        patch(
+            "documind.documents.processing.replace_document_pages",
+            new_callable=AsyncMock,
+        ) as replace_pages,
+    ):
+        saved = asyncio.run(
+            extract_and_store_document_pages(
+                session_factory=session_factory,
+                s3_client=s3_client,
+                bucket="test-documents",
+                document_id=document_id,
+                owner_id=owner_id,
+            )
+        )
+
+    assert saved is False
+    session_factory.assert_called_once_with()
+    get_document.assert_awaited_once_with(
+        database_session=session_factory.return_value.__aenter__.return_value,
+        document_id=document_id,
+        owner_id=owner_id,
+    )
+    extract_document.assert_not_awaited()
+    replace_pages.assert_not_awaited()
