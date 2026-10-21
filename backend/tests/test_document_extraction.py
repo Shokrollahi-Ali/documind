@@ -1,9 +1,9 @@
+from collections.abc import Callable
 from io import BytesIO
 
 import pytest
 from pypdf import PdfWriter
 from pypdf.errors import PyPdfError
-from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from documind.documents.extraction import (
     ExtractedPage,
@@ -13,35 +13,10 @@ from documind.documents.extraction import (
 )
 
 
-def create_pdf(page_contents: list[bytes]) -> bytes:
-    font = DictionaryObject(
-        {
-            NameObject("/Type"): NameObject("/Font"),
-            NameObject("/Subtype"): NameObject("/Type1"),
-            NameObject("/BaseFont"): NameObject("/Helvetica"),
-        }
-    )
-
-    with BytesIO() as file:
-        with PdfWriter() as writer:
-            for content in page_contents:
-                page = writer.add_blank_page(width=612, height=792)
-                page[NameObject("/Resources")] = DictionaryObject(
-                    {
-                        NameObject("/Font"): DictionaryObject({NameObject("/F1"): font}),
-                    }
-                )
-                stream = DecodedStreamObject()
-                stream.set_data(content)
-                page[NameObject("/Contents")] = stream
-
-            writer.write(file)
-
-        return file.getvalue()
-
-
-def test_extracts_text_and_preserves_original_page_numbers() -> None:
-    pdf = create_pdf(
+def test_extracts_text_and_preserves_original_page_numbers(
+    pdf_factory: Callable[[list[bytes]], bytes],
+) -> None:
+    pdf = pdf_factory(
         [
             b"BT /F1 12 Tf 72 720 Td (  First page  ) Tj ET",
             b"",
@@ -76,8 +51,8 @@ def test_rejects_pdf_without_extractable_text() -> None:
         assert not file.closed
 
 
-def test_rejects_pdf_with_only_whitespace() -> None:
-    pdf = create_pdf([b"BT /F1 12 Tf 72 720 Td (   ) Tj ET"])
+def test_rejects_pdf_with_only_whitespace(pdf_factory: Callable[[list[bytes]], bytes]) -> None:
+    pdf = pdf_factory([b"BT /F1 12 Tf 72 720 Td (   ) Tj ET"])
 
     with BytesIO(pdf) as file:
         with pytest.raises(NoExtractableTextError):
@@ -87,8 +62,8 @@ def test_rejects_pdf_with_only_whitespace() -> None:
         assert not file.closed
 
 
-def test_rejects_pdf_without_pages() -> None:
-    with BytesIO(create_pdf([])) as file:
+def test_rejects_pdf_without_pages(pdf_factory: Callable[[list[bytes]], bytes]) -> None:
+    with BytesIO(pdf_factory([])) as file:
         with pytest.raises(NoExtractableTextError):
             extract_pdf_pages(file)
 
