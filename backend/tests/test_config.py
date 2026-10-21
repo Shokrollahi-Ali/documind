@@ -70,3 +70,15 @@ def test_reads_session_cookie_name_from_environment(monkeypatch: pytest.MonkeyPa
 def test_rejects_empty_session_cookie_name() -> None:
     with pytest.raises(ValidationError, match="session_cookie_name"):
         Settings(_env_file=None, session_cookie_name="")
+
+
+def test_reads_celery_broker_url_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    broker_url = "redis://localhost:6379/0"
+    monkeypatch.setenv("DOCUMIND_CELERY_BROKER_URL", broker_url)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.celery_broker_url is not None
+    assert settings.celery_broker_url.get_secret_value() == broker_url

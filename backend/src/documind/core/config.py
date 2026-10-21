@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     database_url: SecretStr = SecretStr(
         f"postgresql+psycopg://documind:{LOCAL_DATABASE_PASSWORD}@localhost:5432/documind"
     )
+    celery_broker_url: SecretStr | None = None
     max_upload_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     session_lifetime_seconds: int = Field(default=24 * 60 * 60, gt=0)
     session_cookie_name: str = Field(default="documind_session", min_length=1)
