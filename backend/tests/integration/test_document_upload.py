@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from documind.core.config import Settings
 from documind.models.document import Document, DocumentStatus
+from documind.models.document_processing_request import DocumentProcessingRequest
 from documind.storage.s3 import download_document_file
 
 if TYPE_CHECKING:
@@ -63,6 +64,14 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
 
             storage_key = document.storage_key
 
+            processing_request = session.scalars(
+                select(DocumentProcessingRequest).where(
+                    DocumentProcessingRequest.document_id == document_id
+                )
+            ).one()
+            assert processing_request.created_at is not None
+            processing_request_id = processing_request.id
+
         stored_file = integration_s3_client.get_object(
             Bucket=bucket,
             Key=storage_key,
@@ -97,6 +106,7 @@ def test_uploaded_document_can_be_retrieved_and_deleted(
 
         with Session(integration_database_engine) as session:
             assert session.get(Document, document_id) is None
+            assert session.get(DocumentProcessingRequest, processing_request_id) is None
 
         with pytest.raises(ClientError) as exception_info:
             integration_s3_client.head_object(

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.documents.service import create_document
 from documind.models.document import DocumentStatus
+from documind.models.document_processing_request import DocumentProcessingRequest
 from documind.schemas.document_upload import DocumentUploadMetadata
 
 
@@ -56,8 +57,14 @@ def test_creates_document_and_uploads_file(owner_id: UUID) -> None:
         )
 
     assert transaction_open_during_upload == [False]
-    database_session.add.assert_called_once_with(document)
-    database_session.flush.assert_awaited_once_with()
+    assert database_session.add.call_count == 2
+    assert database_session.add.call_args_list[0].args[0] is document
+
+    processing_request = database_session.add.call_args_list[1].args[0]
+    assert isinstance(processing_request, DocumentProcessingRequest)
+    assert processing_request.document_id == document.id
+
+    assert database_session.flush.await_count == 2
 
     assert document.owner_id == owner_id
     assert document.original_filename == "document.pdf"
@@ -67,10 +74,11 @@ def test_creates_document_and_uploads_file(owner_id: UUID) -> None:
     assert document.storage_key == f"documents/{document.id}.pdf"
 
 
-def test_cleans_up_file_when_database_insert_fails(owner_id: UUID) -> None:
+@pytest.mark.parametrize("failed_insert", [1, 2], ids=["document", "processing-request"])
+def test_cleans_up_file_when_database_insert_fails(owner_id: UUID, failed_insert: int) -> None:
     database_session = MagicMock(spec=AsyncSession)
     insert_error = SQLAlchemyError("Database insert failed")
-    database_session.flush.side_effect = insert_error
+    database_session.flush.side_effect = [None] * (failed_insert - 1) + [insert_error]
     s3_client = MagicMock()
     metadata = DocumentUploadMetadata(
         original_filename="document.pdf",
@@ -101,7 +109,7 @@ def test_cleans_up_file_when_database_insert_fails(owner_id: UUID) -> None:
                     )
                 )
 
-        database_session.flush.assert_awaited_once_with()
+        assert database_session.flush.await_count == failed_insert
         upload_file.assert_awaited_once()
         storage_key = upload_file.call_args.kwargs["storage_key"]
         cleanup_file.assert_awaited_once_with(

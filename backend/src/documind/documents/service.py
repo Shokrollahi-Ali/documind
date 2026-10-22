@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from documind.models.document import Document, DocumentStatus
+from documind.models.document_processing_request import DocumentProcessingRequest
 from documind.schemas.document_upload import DocumentUploadMetadata
 from documind.storage.s3 import delete_document_file, upload_document_file
 
@@ -65,6 +66,11 @@ async def create_document(
         async with database_session.begin():
             database_session.add(document)
             await database_session.flush()
+
+            processing_request = DocumentProcessingRequest(document_id=document.id)
+            database_session.add(processing_request)
+            await database_session.flush()
+
             commit_started = True
 
     except Exception:
