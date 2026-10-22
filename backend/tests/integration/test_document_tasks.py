@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable, Iterator
 from time import monotonic, sleep
 from urllib.parse import urlsplit
@@ -12,7 +13,10 @@ from sqlalchemy.orm import Session
 
 from documind.core.celery import create_celery_app
 from documind.core.config import Settings
+from documind.db.session import create_database_engine, create_session_factory
+from documind.documents.dispatch import dispatch_next_processing_request
 from documind.models.document_page import DocumentPage
+from documind.models.document_processing_request import DocumentProcessingRequest
 
 pytestmark = pytest.mark.integration
 
@@ -50,7 +54,10 @@ def celery_application(integration_settings: Settings) -> Iterator[Celery]:
         application.close()
 
 
+@pytest.mark.parametrize("use_dispatcher", [False, True], ids=["direct", "dispatcher"])
 def test_worker_extracts_and_saves_uploaded_document(
+    use_dispatcher: bool,
+    integration_settings: Settings,
     authenticated_client: TestClient,
     integration_database_engine: Engine,
     celery_application: Celery,
@@ -75,11 +82,31 @@ def test_worker_extracts_and_saves_uploaded_document(
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
 
-    celery_application.send_task(
-        "documind.process_document",
-        args=[str(document_id), owner_id],
-        queue=celery_application.conf.task_default_queue,
-    )
+    if use_dispatcher:
+
+        async def dispatch_uploaded_document() -> None:
+            engine = create_database_engine(integration_settings)
+            try:
+                session_factory = create_session_factory(engine)
+                async with session_factory() as session:
+                    assert await dispatch_next_processing_request(session, celery_application)
+            finally:
+                await engine.dispose()
+
+        asyncio.run(dispatch_uploaded_document())
+        with Session(integration_database_engine) as session:
+            request = session.scalar(
+                select(DocumentProcessingRequest).where(
+                    DocumentProcessingRequest.document_id == document_id
+                )
+            )
+            assert request is None
+    else:
+        celery_application.send_task(
+            "documind.process_document",
+            args=[str(document_id), owner_id],
+            queue=celery_application.conf.task_default_queue,
+        )
 
     deadline = monotonic() + 15
 

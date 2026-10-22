@@ -82,3 +82,14 @@ def test_reads_celery_broker_url_from_environment(
 
     assert settings.celery_broker_url is not None
     assert settings.celery_broker_url.get_secret_value() == broker_url
+
+
+@pytest.mark.parametrize("interval", [0, -1])
+def test_rejects_non_positive_dispatch_interval(interval: float) -> None:
+    with pytest.raises(ValidationError, match="processing_dispatch_interval_seconds"):
+        Settings(_env_file=None, processing_dispatch_interval_seconds=interval)
+
+
+def test_reads_dispatch_interval_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCUMIND_PROCESSING_DISPATCH_INTERVAL_SECONDS", "2.5")
+    assert Settings(_env_file=None).processing_dispatch_interval_seconds == 2.5
