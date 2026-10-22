@@ -67,7 +67,7 @@ jobs:
       DOCUMIND_S3_ENDPOINT_URL: http://localhost:4567
       DOCUMIND_S3_ACCESS_KEY_ID: test
       DOCUMIND_S3_SECRET_ACCESS_KEY: test
-
+      DOCUMIND_CELERY_BROKER_URL: redis://localhost:6380/0
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

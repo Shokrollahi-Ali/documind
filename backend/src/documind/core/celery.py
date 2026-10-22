@@ -15,6 +15,7 @@ def create_celery_app(settings: Settings) -> Celery:
     application = Celery(
         "documind",
         broker=broker_url,
+        include=["documind.documents.tasks"],
         set_as_current=False,
     )
     application.conf.update(
