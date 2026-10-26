@@ -1,9 +1,10 @@
 import asyncio
 from collections.abc import Iterator, Sequence
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, delete, select
+from sqlalchemy import Engine, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,7 @@ from documind.core.config import Settings
 from documind.db.session import create_database_engine, create_session_factory
 from documind.documents.extraction import ExtractedPage
 from documind.documents.pages import replace_document_pages
-from documind.models.document import Document
+from documind.models.document import Document, DocumentStatus
 from documind.models.document_page import DocumentPage
 from documind.models.user import User
 
@@ -63,8 +64,31 @@ async def save_pages(
     session_factory = create_session_factory(engine)
 
     try:
+        attempt_id = uuid4()
+
         async with session_factory() as session:
-            return await replace_document_pages(session, document_id, owner_id, pages)
+            async with session.begin():
+                await session.execute(
+                    update(Document)
+                    .where(
+                        Document.id == document_id,
+                        Document.owner_id == owner_id,
+                    )
+                    .values(
+                        status=DocumentStatus.PROCESSING,
+                        processing_attempt_id=attempt_id,
+                        processing_lease_expires_at=(func.clock_timestamp() + timedelta(minutes=5)),
+                    )
+                )
+
+        async with session_factory() as session:
+            return await replace_document_pages(
+                database_session=session,
+                document_id=document_id,
+                owner_id=owner_id,
+                pages=pages,
+                attempt_id=attempt_id,
+            )
     finally:
         await engine.dispose()
 
@@ -93,6 +117,10 @@ def test_saves_and_replaces_pages_without_duplicates(
 
         assert saved is True
         assert read_pages(integration_database_engine, document_id) == pages
+        with Session(integration_database_engine) as session:
+            document = session.get(Document, document_id)
+            assert document is not None
+            assert document.status == DocumentStatus.EXTRACTED
 
 
 @pytest.mark.parametrize("missing_document", [False, True], ids=["wrong-owner", "missing-document"])
@@ -140,7 +168,71 @@ def test_failed_replacement_preserves_previous_pages(
     original_pages = [ExtractedPage(1, "Original text"), ExtractedPage(2, "Second page")]
     asyncio.run(save_pages(integration_settings, document_id, owner_id, original_pages))
 
+    with Session(integration_database_engine) as session:
+        with session.begin():
+            document = session.get(Document, document_id)
+            assert document is not None
+            document.status = DocumentStatus.PROCESSING
+
     with pytest.raises(IntegrityError):
         asyncio.run(save_pages(integration_settings, document_id, owner_id, invalid_pages))
 
     assert read_pages(integration_database_engine, document_id) == original_pages
+    with Session(integration_database_engine) as session:
+        document = session.get(Document, document_id)
+        assert document is not None
+        assert document.status == DocumentStatus.PROCESSING
+
+
+@pytest.mark.parametrize("lease_expired", [False, True], ids=["replaced", "expired"])
+def test_stale_attempt_does_not_replace_pages(
+    integration_settings: Settings,
+    integration_database_engine: Engine,
+    stored_document: tuple[UUID, UUID],
+    lease_expired: bool,
+) -> None:
+    document_id, owner_id = stored_document
+    original_pages = [ExtractedPage(1, "Original text")]
+    asyncio.run(save_pages(integration_settings, document_id, owner_id, original_pages))
+
+    stale_attempt_id = uuid4()
+    current_attempt_id = uuid4() if not lease_expired else stale_attempt_id
+
+    with Session(integration_database_engine) as session:
+        with session.begin():
+            document = session.get(Document, document_id)
+            assert document is not None
+            database_time = session.scalar(select(func.clock_timestamp()))
+            assert database_time is not None
+
+            document.status = DocumentStatus.PROCESSING
+            document.processing_attempt_id = current_attempt_id
+            document.processing_lease_expires_at = database_time + timedelta(
+                seconds=-1 if lease_expired else 300
+            )
+            original_expiry = document.processing_lease_expires_at
+
+    async def attempt_replacement() -> bool:
+        engine = create_database_engine(integration_settings)
+        try:
+            session_factory = create_session_factory(engine)
+            async with session_factory() as session:
+                return await replace_document_pages(
+                    database_session=session,
+                    document_id=document_id,
+                    owner_id=owner_id,
+                    pages=[ExtractedPage(1, "Stale text")],
+                    attempt_id=stale_attempt_id,
+                )
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(attempt_replacement()) is False
+    assert read_pages(integration_database_engine, document_id) == original_pages
+
+    with Session(integration_database_engine) as session:
+        document = session.get(Document, document_id)
+        assert document is not None
+        assert document.status == DocumentStatus.PROCESSING
+        assert document.processing_attempt_id == current_attempt_id
+        assert document.processing_lease_expires_at == original_expiry

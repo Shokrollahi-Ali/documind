@@ -18,6 +18,7 @@ def test_rejects_empty_pages_before_starting_transaction() -> None:
                 document_id=uuid4(),
                 owner_id=uuid4(),
                 pages=[],
+                attempt_id=uuid4(),
             )
         )
 

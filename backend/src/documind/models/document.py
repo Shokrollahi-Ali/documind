@@ -11,6 +11,7 @@ from documind.db.base import Base
 class DocumentStatus(StrEnum):
     UPLOADED = "uploaded"
     PROCESSING = "processing"
+    EXTRACTED = "extracted"
     READY = "ready"
     FAILED = "failed"
 
@@ -37,3 +38,8 @@ class Document(Base):
         server_default=DocumentStatus.UPLOADED.value,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processing_attempt_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    processing_lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

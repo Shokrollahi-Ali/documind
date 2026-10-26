@@ -27,6 +27,7 @@ async def run_document_processing(
                 bucket=settings.s3_bucket,
                 document_id=document_id,
                 owner_id=owner_id,
+                lease_seconds=settings.processing_lease_seconds,
             )
     finally:
         await engine.dispose()

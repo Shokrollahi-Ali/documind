@@ -18,13 +18,15 @@ def test_processing_failure_closes_resources() -> None:
     engine = MagicMock(spec=AsyncEngine)
     s3_client = MagicMock(spec=["close"])
     error = PdfExtractionError("Could not extract text from the PDF")
+    document_id = uuid4()
+    owner_id = uuid4()
 
     with (
         patch(
             "documind.documents.tasks.create_database_engine",
             return_value=engine,
         ),
-        patch("documind.documents.tasks.create_session_factory"),
+        patch("documind.documents.tasks.create_session_factory") as create_session_factory,
         patch(
             "documind.documents.tasks.create_s3_client",
             return_value=s3_client,
@@ -33,18 +35,26 @@ def test_processing_failure_closes_resources() -> None:
             "documind.documents.tasks.extract_and_store_document_pages",
             new_callable=AsyncMock,
             side_effect=error,
-        ),
+        ) as process_document,
     ):
         with pytest.raises(PdfExtractionError) as exception_info:
             asyncio.run(
                 run_document_processing(
                     settings=settings,
-                    document_id=uuid4(),
-                    owner_id=uuid4(),
+                    document_id=document_id,
+                    owner_id=owner_id,
                 )
             )
 
     assert exception_info.value is error
+    process_document.assert_awaited_once_with(
+        session_factory=create_session_factory.return_value,
+        s3_client=s3_client,
+        bucket=settings.s3_bucket,
+        document_id=document_id,
+        owner_id=owner_id,
+        lease_seconds=settings.processing_lease_seconds,
+    )
     s3_client.close.assert_called_once_with()
     engine.dispose.assert_awaited_once_with()
 

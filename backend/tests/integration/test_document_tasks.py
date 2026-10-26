@@ -15,6 +15,7 @@ from documind.core.celery import create_celery_app
 from documind.core.config import Settings
 from documind.db.session import create_database_engine, create_session_factory
 from documind.documents.dispatch import dispatch_next_processing_request
+from documind.models.document import Document, DocumentStatus
 from documind.models.document_page import DocumentPage
 from documind.models.document_processing_request import DocumentProcessingRequest
 
@@ -123,6 +124,11 @@ def test_worker_extracts_and_saves_uploaded_document(
                     (1, "First page"),
                     (3, "Third page"),
                 ]
+                document = session.get(Document, document_id)
+                assert document is not None
+                assert document.status == DocumentStatus.EXTRACTED
+                assert document.processing_attempt_id is None
+                assert document.processing_lease_expires_at is None
                 return
 
         sleep(0.1)

@@ -84,6 +84,20 @@ def test_reads_celery_broker_url_from_environment(
     assert settings.celery_broker_url.get_secret_value() == broker_url
 
 
+@pytest.mark.parametrize("lease_seconds", [0, -1])
+def test_rejects_non_positive_processing_lease(lease_seconds: int) -> None:
+    with pytest.raises(ValidationError, match="processing_lease_seconds"):
+        Settings(_env_file=None, processing_lease_seconds=lease_seconds)
+
+
+def test_reads_processing_lease_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DOCUMIND_PROCESSING_LEASE_SECONDS", "600")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.processing_lease_seconds == 600
+
+
 @pytest.mark.parametrize("interval", [0, -1])
 def test_rejects_non_positive_dispatch_interval(interval: float) -> None:
     with pytest.raises(ValidationError, match="processing_dispatch_interval_seconds"):
