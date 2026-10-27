@@ -66,6 +66,31 @@ def integration_database_engine(
 
 
 @pytest.fixture
+def document_session(
+    integration_database_engine: Engine,
+) -> Iterator[tuple[Session, Document]]:
+    with Session(integration_database_engine) as session:
+        user = User(
+            email=f"{uuid4()}@example.com",
+            password_hash="unused-in-document-storage-tests",
+        )
+        session.add(user)
+        session.flush()
+
+        document = Document(
+            owner_id=user.id,
+            original_filename="document.pdf",
+            storage_key=f"documents/{uuid4()}.pdf",
+            content_type="application/pdf",
+            size_bytes=100,
+        )
+        session.add(document)
+        session.flush()
+
+        yield session, document
+
+
+@pytest.fixture
 def integration_s3_client(
     integration_settings: Settings,
 ) -> Iterator["S3Client"]:

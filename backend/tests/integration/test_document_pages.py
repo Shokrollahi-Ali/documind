@@ -1,41 +1,14 @@
-from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import Engine, insert, select
+from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from documind.models.document import Document
 from documind.models.document_page import DocumentPage
-from documind.models.user import User
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture
-def document_session(
-    integration_database_engine: Engine,
-) -> Iterator[tuple[Session, Document]]:
-    with Session(integration_database_engine) as session:
-        user = User(
-            email=f"{uuid4()}@example.com",
-            password_hash="unused-in-document-page-tests",
-        )
-        session.add(user)
-        session.flush()
-
-        document = Document(
-            owner_id=user.id,
-            original_filename="document.pdf",
-            storage_key=f"documents/{uuid4()}.pdf",
-            content_type="application/pdf",
-            size_bytes=100,
-        )
-        session.add(document)
-        session.flush()
-
-        yield session, document
 
 
 def test_saves_and_reads_document_pages(document_session: tuple[Session, Document]) -> None:
