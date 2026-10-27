@@ -16,6 +16,7 @@ from documind.core.config import Settings
 from documind.db.session import create_database_engine, create_session_factory
 from documind.documents.dispatch import dispatch_next_processing_request
 from documind.models.document import Document, DocumentStatus
+from documind.models.document_chunk import DocumentChunk
 from documind.models.document_page import DocumentPage
 from documind.models.document_processing_request import DocumentProcessingRequest
 
@@ -119,18 +120,26 @@ def test_worker_extracts_and_saves_uploaded_document(
                 .order_by(DocumentPage.page_number)
             ).all()
 
-            if pages:
+            document = session.get(Document, document_id)
+
+            if document is not None and document.status == DocumentStatus.CHUNKED:
                 assert [(page.page_number, page.text) for page in pages] == [
                     (1, "First page"),
                     (3, "Third page"),
                 ]
-                document = session.get(Document, document_id)
-                assert document is not None
-                assert document.status == DocumentStatus.EXTRACTED
+                chunks = session.scalars(
+                    select(DocumentChunk)
+                    .where(DocumentChunk.document_id == document_id)
+                    .order_by(DocumentChunk.chunk_index)
+                ).all()
+                assert [(chunk.chunk_index, chunk.page_number, chunk.text) for chunk in chunks] == [
+                    (0, 1, "First page"),
+                    (1, 3, "Third page"),
+                ]
                 assert document.processing_attempt_id is None
                 assert document.processing_lease_expires_at is None
                 return
 
         sleep(0.1)
 
-    pytest.fail("The worker did not save document pages within 15 seconds")
+    pytest.fail("The worker did not prepare document chunks within 15 seconds")

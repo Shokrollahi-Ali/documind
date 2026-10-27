@@ -12,6 +12,7 @@ class DocumentStatus(StrEnum):
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     EXTRACTED = "extracted"
+    CHUNKED = "chunked"
     READY = "ready"
     FAILED = "failed"
 

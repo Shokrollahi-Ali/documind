@@ -57,3 +57,22 @@ async def replace_document_pages(
         await database_session.flush()
 
     return True
+
+
+async def get_document_pages(
+    database_session: AsyncSession,
+    document_id: UUID,
+    owner_id: UUID,
+) -> list[ExtractedPage]:
+    statement = (
+        select(DocumentPage)
+        .join(Document, DocumentPage.document_id == Document.id)
+        .where(
+            DocumentPage.document_id == document_id,
+            Document.owner_id == owner_id,
+        )
+        .order_by(DocumentPage.page_number)
+    )
+    stored_pages = await database_session.scalars(statement)
+
+    return [ExtractedPage(page_number=page.page_number, text=page.text) for page in stored_pages]

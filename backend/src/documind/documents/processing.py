@@ -120,6 +120,7 @@ async def extract_and_store_document_pages(
 
         if document.status in {
             DocumentStatus.EXTRACTED,
+            DocumentStatus.CHUNKED,
             DocumentStatus.READY,
         }:
             return True

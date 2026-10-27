@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     celery_broker_url: SecretStr | None = None
     processing_dispatch_interval_seconds: float = Field(default=5.0, gt=0)
     processing_lease_seconds: int = Field(default=300, gt=0)
+    chunk_size_chars: int = Field(default=1000, gt=0)
+    chunk_overlap_chars: int = Field(default=200, ge=0)
     max_upload_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     session_lifetime_seconds: int = Field(default=24 * 60 * 60, gt=0)
     session_cookie_name: str = Field(default="documind_session", min_length=1)
@@ -40,4 +42,10 @@ class Settings(BaseSettings):
                 "DOCUMIND_DATABASE_URL must be set to a production database "
                 "when DOCUMIND_ENVIRONMENT is production"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_chunk_overlap(self) -> Self:
+        if self.chunk_overlap_chars >= self.chunk_size_chars:
+            raise ValueError("Chunk overlap must be smaller than chunk size")
         return self

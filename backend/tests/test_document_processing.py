@@ -309,7 +309,9 @@ def test_document_without_a_lease_skips_extraction() -> None:
     replace_pages.assert_not_awaited()
 
 
-@pytest.mark.parametrize("status", [DocumentStatus.EXTRACTED, DocumentStatus.READY])
+@pytest.mark.parametrize(
+    "status", [DocumentStatus.EXTRACTED, DocumentStatus.CHUNKED, DocumentStatus.READY]
+)
 def test_completed_document_skips_extraction_and_storage(status: DocumentStatus) -> None:
     session_factory = MagicMock()
     document = Document(id=uuid4(), owner_id=uuid4(), status=status)

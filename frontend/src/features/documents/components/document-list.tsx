@@ -14,6 +14,8 @@ const noticeDurationMs = 5000;
 const statusLabels = {
   uploaded: "Uploaded",
   processing: "Processing",
+  extracted: "Extracted",
+  chunked: "Chunked",
   ready: "Ready",
   failed: "Failed",
 };

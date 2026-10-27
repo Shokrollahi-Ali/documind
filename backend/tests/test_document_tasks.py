@@ -59,6 +59,46 @@ def test_processing_failure_closes_resources() -> None:
     engine.dispose.assert_awaited_once_with()
 
 
+@pytest.mark.parametrize("extracted", [False, True])
+def test_chunking_runs_only_after_successful_extraction(extracted: bool) -> None:
+    settings = Settings(_env_file=None)
+    engine = MagicMock(spec=AsyncEngine)
+    s3_client = MagicMock(spec=["close"])
+    document_id = uuid4()
+    owner_id = uuid4()
+
+    with (
+        patch("documind.documents.tasks.create_database_engine", return_value=engine),
+        patch("documind.documents.tasks.create_session_factory") as create_session_factory,
+        patch("documind.documents.tasks.create_s3_client", return_value=s3_client),
+        patch(
+            "documind.documents.tasks.extract_and_store_document_pages",
+            new_callable=AsyncMock,
+            return_value=extracted,
+        ),
+        patch(
+            "documind.documents.tasks.chunk_and_store_document",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as chunk_document,
+    ):
+        result = asyncio.run(run_document_processing(settings, document_id, owner_id))
+
+    assert result is extracted
+    if extracted:
+        chunk_document.assert_awaited_once_with(
+            session_factory=create_session_factory.return_value,
+            document_id=document_id,
+            owner_id=owner_id,
+            chunk_size=settings.chunk_size_chars,
+            chunk_overlap=settings.chunk_overlap_chars,
+        )
+    else:
+        chunk_document.assert_not_awaited()
+    s3_client.close.assert_called_once_with()
+    engine.dispose.assert_awaited_once_with()
+
+
 @pytest.mark.parametrize("processing_result", [True, False])
 def test_task_converts_ids_and_returns_processing_result(
     processing_result: bool,

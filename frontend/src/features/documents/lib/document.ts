@@ -3,7 +3,7 @@ export type DocumentMetadata = {
   original_filename: string;
   content_type: string;
   size_bytes: number;
-  status: "uploaded" | "processing" | "ready" | "failed";
+  status: "uploaded" | "processing" | "extracted" | "chunked" | "ready" | "failed";
   created_at: string;
 };
 
@@ -11,7 +11,7 @@ export function isDocumentMetadata(value: unknown): value is DocumentMetadata {
   if (typeof value !== "object" || value === null) return false;
 
   const document = value as Record<string, unknown>;
-  const validStatuses = ["uploaded", "processing", "ready", "failed"];
+  const validStatuses = ["uploaded", "processing", "extracted", "chunked", "ready", "failed"];
 
   return (
     typeof document.id === "string" && document.id.length > 0 &&
@@ -24,4 +24,3 @@ export function isDocumentMetadata(value: unknown): value is DocumentMetadata {
     Number.isFinite(Date.parse(document.created_at))
   );
 }
-
