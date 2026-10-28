@@ -2,7 +2,7 @@ name: documind-test
 
 services:
   postgres:
-    image: postgres:17-bookworm
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
     environment:
       POSTGRES_USER: documind
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env}
