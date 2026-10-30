@@ -2,6 +2,7 @@ import logging
 from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, Request, status
+from langchain_core.embeddings import Embeddings
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 async def get_settings(request: Request) -> Settings:
     return cast(Settings, request.app.state.settings)
+
+
+async def get_embeddings(request: Request) -> Embeddings:
+    embeddings = cast(Embeddings | None, request.app.state.embeddings)
+
+    if embeddings is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document search is unavailable",
+        )
+
+    return embeddings
 
 
 async def get_current_user(

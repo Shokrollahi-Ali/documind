@@ -20,6 +20,15 @@ def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessi
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
+async def get_database_session_factory(
+    request: Request,
+) -> async_sessionmaker[AsyncSession]:
+    return cast(
+        async_sessionmaker[AsyncSession],
+        request.app.state.session_factory,
+    )
+
+
 async def get_database_session(request: Request) -> AsyncIterator[AsyncSession]:
     session_factory = cast(async_sessionmaker[AsyncSession], request.app.state.session_factory)
 

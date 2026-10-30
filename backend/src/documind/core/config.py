@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     processing_lease_seconds: int = Field(default=300, gt=0)
     chunk_size_chars: int = Field(default=1000, gt=0)
     chunk_overlap_chars: int = Field(default=200, ge=0)
+    retrieval_top_k: int = Field(default=5, ge=1, le=20)
     max_upload_size_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     session_lifetime_seconds: int = Field(default=24 * 60 * 60, gt=0)
     session_cookie_name: str = Field(default="documind_session", min_length=1)
