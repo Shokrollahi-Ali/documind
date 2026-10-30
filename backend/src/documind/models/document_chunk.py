@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,3 +22,4 @@ class DocumentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(primary_key=True)
     page_number: Mapped[int]
     text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)

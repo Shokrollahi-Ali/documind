@@ -6,6 +6,33 @@ from documind.core.config import Settings
 PRODUCTION_DATABASE_URL = "postgresql+psycopg://documind:production-secret@db.internal/documind"
 
 
+@pytest.mark.parametrize("timeout", [0, -1])
+def test_rejects_non_positive_embedding_timeout(timeout: float) -> None:
+    with pytest.raises(ValidationError, match="embedding_request_timeout_seconds"):
+        Settings(_env_file=None, embedding_request_timeout_seconds=timeout)
+
+
+def test_reads_embedding_configuration_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOCUMIND_OPENAI_API_KEY", "test-embedding-key")
+    monkeypatch.setenv("DOCUMIND_EMBEDDING_REQUEST_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("DOCUMIND_EMBEDDING_MODEL", "text-embedding-3-small")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.openai_api_key is not None
+    assert settings.openai_api_key.get_secret_value() == "test-embedding-key"
+    assert "test-embedding-key" not in repr(settings)
+    assert settings.embedding_request_timeout_seconds == 12.5
+    assert settings.embedding_model == "text-embedding-3-small"
+
+
+def test_rejects_embedding_model_incompatible_with_storage() -> None:
+    with pytest.raises(ValidationError, match="embedding_model"):
+        Settings(_env_file=None, embedding_model="text-embedding-3-large")
+
+
 @pytest.fixture(autouse=True)
 def clear_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DOCUMIND_DATABASE_URL", raising=False)

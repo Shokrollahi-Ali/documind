@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable, Iterator
 from time import monotonic, sleep
+from unittest.mock import patch
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -8,6 +9,7 @@ import pytest
 from celery import Celery
 from celery.contrib.testing.worker import start_worker
 from fastapi.testclient import TestClient
+from langchain_core.embeddings import Embeddings
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
@@ -23,8 +25,30 @@ from documind.models.document_processing_request import DocumentProcessingReques
 pytestmark = pytest.mark.integration
 
 
+class FakeEmbeddings(Embeddings):
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[float(len(text)) / 100] * 1536 for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_documents([text])[0]
+
+
+class FailingEmbeddings(FakeEmbeddings):
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        raise ValueError("Invalid embedding response")
+
+
 @pytest.fixture
-def celery_application(integration_settings: Settings) -> Iterator[Celery]:
+def embedding_provider(embedding_failure: bool) -> Iterator[Embeddings]:
+    provider = FailingEmbeddings() if embedding_failure else FakeEmbeddings()
+    with patch("documind.documents.tasks.create_embeddings", return_value=provider):
+        yield provider
+
+
+@pytest.fixture
+def celery_application(
+    integration_settings: Settings, embedding_provider: Embeddings
+) -> Iterator[Celery]:
     broker_url = integration_settings.celery_broker_url
 
     if broker_url is None:
@@ -57,8 +81,10 @@ def celery_application(integration_settings: Settings) -> Iterator[Celery]:
 
 
 @pytest.mark.parametrize("use_dispatcher", [False, True], ids=["direct", "dispatcher"])
+@pytest.mark.parametrize("embedding_failure", [False, True], ids=["ready", "failed"])
 def test_worker_extracts_and_saves_uploaded_document(
     use_dispatcher: bool,
+    embedding_failure: bool,
     integration_settings: Settings,
     authenticated_client: TestClient,
     integration_database_engine: Engine,
@@ -122,7 +148,8 @@ def test_worker_extracts_and_saves_uploaded_document(
 
             document = session.get(Document, document_id)
 
-            if document is not None and document.status == DocumentStatus.CHUNKED:
+            expected_status = DocumentStatus.FAILED if embedding_failure else DocumentStatus.READY
+            if document is not None and document.status == expected_status:
                 assert [(page.page_number, page.text) for page in pages] == [
                     (1, "First page"),
                     (3, "Third page"),
@@ -136,10 +163,18 @@ def test_worker_extracts_and_saves_uploaded_document(
                     (0, 1, "First page"),
                     (1, 3, "Third page"),
                 ]
+                for chunk in chunks:
+                    if embedding_failure:
+                        assert chunk.embedding is None
+                    else:
+                        assert chunk.embedding is not None
+                        assert list(chunk.embedding) == pytest.approx(
+                            [float(len(chunk.text)) / 100] * 1536
+                        )
                 assert document.processing_attempt_id is None
                 assert document.processing_lease_expires_at is None
                 return
 
         sleep(0.1)
 
-    pytest.fail("The worker did not prepare document chunks within 15 seconds")
+    pytest.fail("The worker did not finish document processing within 15 seconds")

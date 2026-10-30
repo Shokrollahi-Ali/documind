@@ -52,3 +52,88 @@ async def replace_document_chunks(
         await database_session.flush()
 
     return True
+
+
+async def get_document_chunks(
+    database_session: AsyncSession,
+    document_id: UUID,
+    owner_id: UUID,
+) -> list[TextChunk]:
+    statement = (
+        select(DocumentChunk)
+        .join(Document, DocumentChunk.document_id == Document.id)
+        .where(
+            DocumentChunk.document_id == document_id,
+            Document.owner_id == owner_id,
+        )
+        .order_by(DocumentChunk.chunk_index)
+    )
+    stored_chunks = await database_session.scalars(statement)
+
+    return [
+        TextChunk(
+            chunk_index=chunk.chunk_index,
+            page_number=chunk.page_number,
+            text=chunk.text,
+        )
+        for chunk in stored_chunks
+    ]
+
+
+async def save_document_embeddings(
+    database_session: AsyncSession,
+    document_id: UUID,
+    owner_id: UUID,
+    chunks: Sequence[TextChunk],
+    vectors: Sequence[list[float]],
+) -> bool:
+    if not chunks:
+        raise ValueError("At least one chunk is required")
+
+    if len(vectors) != len(chunks):
+        raise ValueError("Embedding count must match chunk count")
+
+    async with database_session.begin():
+        document_statement = (
+            select(Document)
+            .where(
+                Document.id == document_id,
+                Document.owner_id == owner_id,
+                Document.status == DocumentStatus.CHUNKED,
+            )
+            .with_for_update()
+        )
+        documents = await database_session.scalars(document_statement)
+        document = documents.one_or_none()
+
+        if document is None:
+            return False
+
+        chunk_statement = (
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index)
+            .with_for_update()
+        )
+        result = await database_session.scalars(chunk_statement)
+        stored_chunks = result.all()
+
+        current_chunks = [
+            TextChunk(
+                chunk_index=chunk.chunk_index,
+                page_number=chunk.page_number,
+                text=chunk.text,
+            )
+            for chunk in stored_chunks
+        ]
+
+        if current_chunks != list(chunks):
+            return False
+
+        for stored_chunk, vector in zip(stored_chunks, vectors, strict=True):
+            stored_chunk.embedding = vector
+
+        document.status = DocumentStatus.READY
+        await database_session.flush()
+
+    return True

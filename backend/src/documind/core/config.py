@@ -19,6 +19,9 @@ class Settings(BaseSettings):
         f"postgresql+psycopg://documind:{LOCAL_DATABASE_PASSWORD}@localhost:5432/documind"
     )
     celery_broker_url: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
+    embedding_model: Literal["text-embedding-3-small"] = "text-embedding-3-small"
+    embedding_request_timeout_seconds: float = Field(default=30.0, gt=0)
     processing_dispatch_interval_seconds: float = Field(default=5.0, gt=0)
     processing_lease_seconds: int = Field(default=300, gt=0)
     chunk_size_chars: int = Field(default=1000, gt=0)
