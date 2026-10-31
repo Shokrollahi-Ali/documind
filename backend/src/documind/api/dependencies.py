@@ -3,6 +3,7 @@ from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, Request, status
 from langchain_core.embeddings import Embeddings
+from langchain_openai import ChatOpenAI
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,18 @@ async def get_embeddings(request: Request) -> Embeddings:
         )
 
     return embeddings
+
+
+async def get_answer_model(request: Request) -> ChatOpenAI:
+    model = cast(ChatOpenAI | None, request.app.state.answer_model)
+
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document answer generation is unavailable",
+        )
+
+    return model
 
 
 async def get_current_user(
