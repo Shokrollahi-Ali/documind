@@ -8,7 +8,7 @@ The browser never talks to the FastAPI backend directly. It calls this app's own
 
 - Create an account, sign in and sign out. The session lives in an HttpOnly cookie, so no token is kept in JavaScript or browser storage.
 - Upload one PDF at a time. The upload starts as soon as a file is chosen.
-- See your documents, newest first, ten per page. Each document shows one of three states: Preparing, Ready to ask, or Couldn’t process.
+- See your documents, newest first, with the number per page adjusted to the available screen height. Each document shows one of three states: Preparing, Ready to ask, or Couldn’t process.
 - Delete a document after confirming in a dialog.
 - Select a ready document and ask questions. Each answer shows numbered sources that open to the page number and the exact passage.
 
@@ -70,6 +70,7 @@ All settings are server-only environment variables.
 ## Behaviour worth knowing
 
 - The document list refreshes every 3 seconds while any document on the page is still preparing, and pauses while the browser tab is hidden.
+- Pending questions and their loading state stay with their document when you switch documents. Only one question per document can be in progress at a time.
 - Questions are independent. Each document’s questions and answers stay in workspace memory while you switch documents. History is cleared on reload or sign-out, and deleting a document clears its history. History is not saved to browser storage or the backend.
 - The answer text from the model contains markers like `[chunk 3]`. The app turns them into numbered source buttons and drops any marker that has no matching source.
 - A 401 from any request returns the user to the sign-in screen with a message.
@@ -95,3 +96,5 @@ npm run build
 ```
 
 Tests use Vitest, React Testing Library and jsdom for components, and plain Node for route handlers and helpers.
+
+Frontend CI runs these checks on pushes and pull requests using Node.js 24 and the committed npm lockfile.

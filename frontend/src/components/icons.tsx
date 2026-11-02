@@ -44,6 +44,14 @@ export function RefreshIcon({ className }: IconProps) {
   );
 }
 
+export function LoadingIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M21 12a9 9 0 1 1-9-9" />
+    </Icon>
+  );
+}
+
 export function TrashIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

@@ -102,3 +102,41 @@ it("clears the error when another question is asked", async () => {
   await waitFor(() => expect(result.current.turns).toHaveLength(1));
   expect(result.current.errorMessage).toBeNull();
 });
+
+
+it("rejects duplicate submissions before the component rerenders", async () => {
+  let finishAnswer!: (value: DocumentAnswer) => void;
+  vi.mocked(askDocument).mockImplementation(() => new Promise((resolve) => { finishAnswer = resolve; }));
+  const { result } = renderConversation();
+  act(() => {
+    result.current.askQuestion("First question?", vi.fn());
+    result.current.askQuestion("Duplicate question?", vi.fn());
+  });
+  await waitFor(() => expect(askDocument).toHaveBeenCalledTimes(1));
+  await act(async () => finishAnswer(answer));
+});
+
+it("restores a pending request and its eventual error after remounting", async () => {
+  let rejectAnswer!: (error: Error) => void;
+  vi.mocked(askDocument).mockImplementation(() => new Promise((_resolve, reject) => { rejectAnswer = reject; }));
+  const wrapper = createWrapper();
+  const firstPanel = renderHook(() => useDocumentConversation(documentId, vi.fn()), { wrapper });
+  act(() => firstPanel.result.current.askQuestion("Pending question?", vi.fn()));
+  await waitFor(() => expect(firstPanel.result.current.isAsking).toBe(true));
+  firstPanel.unmount();
+
+  const nextPanel = renderHook(() => useDocumentConversation(documentId, vi.fn()), { wrapper });
+  expect(nextPanel.result.current.isAsking).toBe(true);
+  expect(nextPanel.result.current.pendingQuestion).toBe("Pending question?");
+  act(() => nextPanel.result.current.askQuestion("Duplicate?", vi.fn()));
+  expect(askDocument).toHaveBeenCalledTimes(1);
+
+  await act(async () => rejectAnswer(new Error("Answer service unavailable")));
+  await waitFor(() => expect(nextPanel.result.current.isAsking).toBe(false));
+  expect(nextPanel.result.current.errorMessage).toBe("Answer service unavailable");
+  vi.mocked(askDocument).mockResolvedValue(answer);
+  act(() => nextPanel.result.current.askQuestion("Retry question?", vi.fn()));
+  await waitFor(() => expect(nextPanel.result.current.errorMessage).toBeNull());
+  await waitFor(() => expect(nextPanel.result.current.isAsking).toBe(false));
+  expect(askDocument).toHaveBeenCalledTimes(2);
+});
