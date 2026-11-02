@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SessionExpiredError } from "@/lib/client/session-expired";
 
+import { useConversationHistory } from "../hooks/use-conversation-history";
 import { documentsPageSize, documentsQueryKey, useDocuments } from "../hooks/use-documents";
 import { useSelectedDocument } from "../hooks/use-selected-document";
 import type { DocumentMetadata } from "../lib/document";
@@ -15,6 +16,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
   const queryClient = useQueryClient();
   const [{ page, pageSize }, setPagination] = useState({ page: 0, pageSize: documentsPageSize });
   const documents = useDocuments(page, pageSize);
+  const history = useConversationHistory();
 
   function setPage(nextPage: number) {
     setPagination((current) => ({ ...current, page: nextPage }));
@@ -34,6 +36,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
   }
 
   function handleDeleted(documentId: string) {
+    history.clearTurns(documentId);
     if (selectedDocument?.id === documentId) clearSelection();
   }
 
@@ -51,7 +54,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
         onDeleted={handleDeleted}
         onSessionExpired={onSessionExpired}
       />
-      <DocumentPanel document={selectedDocument} />
+      <DocumentPanel document={selectedDocument} history={history} />
     </div>
   );
 }

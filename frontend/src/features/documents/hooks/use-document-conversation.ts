@@ -1,5 +1,4 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 
 import { askDocument } from "../api/ask-document";
 import type { DocumentAnswer } from "../lib/document-answer";
@@ -9,14 +8,14 @@ export type ConversationTurn = {
   answer: DocumentAnswer;
 };
 
-export function useDocumentConversation(documentId: string) {
-  const [turns, setTurns] = useState<ConversationTurn[]>([]);
+export function useDocumentConversation(
+  documentId: string,
+  onTurnAdded: (turn: ConversationTurn) => void,
+) {
 
   const asking = useMutation({
     mutationFn: (question: string) => askDocument(documentId, question),
-    onSuccess: (answer, question) => {
-      setTurns((currentTurns) => [...currentTurns, { question, answer }]);
-    },
+    onSuccess: (answer, question) => onTurnAdded({ question, answer }),
     retry: false,
   });
 
@@ -25,7 +24,6 @@ export function useDocumentConversation(documentId: string) {
   }
 
   return {
-    turns,
     askQuestion,
     isAsking: asking.isPending,
     pendingQuestion: asking.isPending ? asking.variables : undefined,

@@ -388,7 +388,7 @@ describe("asking questions", () => {
     expect(await screen.findByLabelText("Your question")).toBeInTheDocument();
   });
 
-  it("starts a fresh conversation when another document is selected", async () => {
+  it("keeps separate conversations when switching between documents", async () => {
     const user = userEvent.setup();
     const otherDocument = { ...readyDocument, id: "other-id", original_filename: "other.pdf" };
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(
@@ -404,6 +404,10 @@ describe("asking questions", () => {
 
     expect(screen.queryByRole("button", { name: "Source 1" })).not.toBeInTheDocument();
     expect(screen.getByText(/Ask anything about this document/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "saved.pdf" }));
+    expect(screen.getByText("What is the notice period?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Source 1" })).toBeInTheDocument();
   });
 });
 
@@ -475,4 +479,26 @@ describe("pagination fitted to the screen", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/documents?limit=1&offset=0", expect.any(Object)));
     expect(screen.getByText("Page 1")).toBeInTheDocument();
   });
+});
+
+
+it("keeps an answer for its original document when it arrives after switching", async () => {
+  const user = userEvent.setup();
+  const firstDocument = { ...document, status: "ready" as const };
+  const secondDocument = { ...firstDocument, id: "other-id", original_filename: "other.pdf" };
+  let finishAnswer!: (response: Response) => void;
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+    if (url.endsWith("/answer")) return new Promise<Response>((resolve) => { finishAnswer = resolve; });
+    return Promise.resolve(pageResponse([firstDocument, secondDocument]));
+  }));
+  render(<DocumentWorkspace />);
+  await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+  await user.type(screen.getByLabelText("Your question"), "What is the notice period?");
+  await user.click(screen.getByRole("button", { name: "Ask" }));
+  await user.click(screen.getByRole("button", { name: "other.pdf" }));
+  await act(async () => finishAnswer(Response.json({ answer: "Sixty days.", sources: [] })));
+  expect(screen.queryByText("Sixty days.")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "saved.pdf" }));
+  expect(screen.getByText("Sixty days.")).toBeInTheDocument();
+  expect(screen.getByText("What is the notice period?")).toBeInTheDocument();
 });

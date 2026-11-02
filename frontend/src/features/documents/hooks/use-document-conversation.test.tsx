@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { askDocument } from "../api/ask-document";
 import type { DocumentAnswer } from "../lib/document-answer";
+import { useConversationHistory } from "./use-conversation-history";
 import { useDocumentConversation } from "./use-document-conversation";
 
 vi.mock("../api/ask-document", () => ({ askDocument: vi.fn() }));
@@ -24,7 +25,11 @@ function createWrapper() {
 }
 
 function renderConversation() {
-  return renderHook(() => useDocumentConversation(documentId), { wrapper: createWrapper() });
+  return renderHook(() => {
+    const history = useConversationHistory();
+    const conversation = useDocumentConversation(documentId, (turn) => history.addTurn(documentId, turn));
+    return { ...conversation, turns: history.getTurns(documentId) };
+  }, { wrapper: createWrapper() });
 }
 
 beforeEach(() => {

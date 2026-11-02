@@ -1,8 +1,12 @@
+import type { ConversationHistory } from "../hooks/use-conversation-history";
 import type { DocumentMetadata } from "../lib/document";
 import { getDocumentStage } from "../lib/document-status";
 import QuestionPanel from "./question-panel";
 
-export default function DocumentPanel({ document }: { document: DocumentMetadata | null }) {
+export default function DocumentPanel({ document, history }: {
+  document: DocumentMetadata | null;
+  history: ConversationHistory;
+}) {
   if (!document) {
     return (
       <p className="text-base text-zinc-600 dark:text-zinc-400">
@@ -23,7 +27,14 @@ export default function DocumentPanel({ document }: { document: DocumentMetadata
           This document is still being prepared. This page updates by itself, and you can ask questions once it’s ready.
         </p>
       )}
-      {stage === "ready" && <QuestionPanel key={document.id} documentId={document.id} />}
+      {stage === "ready" && (
+        <QuestionPanel
+          key={document.id}
+          documentId={document.id}
+          turns={history.getTurns(document.id)}
+          onTurnAdded={(turn) => history.addTurn(document.id, turn)}
+        />
+      )}
       {stage === "failed" && (
         <>
           <p className="mt-3 text-base text-red-700 dark:text-red-400">

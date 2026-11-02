@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { askDocument } from "../api/ask-document";
 import type { DocumentAnswer } from "../lib/document-answer";
+import { useConversationHistory } from "../hooks/use-conversation-history";
 import QuestionPanel from "./question-panel";
 
 vi.mock("../api/ask-document", () => ({ askDocument: vi.fn() }));
@@ -15,10 +16,15 @@ const noticeAnswer: DocumentAnswer = {
   sources: [{ chunk_index: 1, page_number: 4, text: "Sixty days notice." }],
 };
 
+function PanelWithHistory() {
+  const history = useConversationHistory();
+  return <QuestionPanel documentId={documentId} turns={history.getTurns(documentId)} onTurnAdded={(turn) => history.addTurn(documentId, turn)} />;
+}
+
 function renderPanel() {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <QuestionPanel documentId={documentId} />
+      <PanelWithHistory />
     </QueryClientProvider>,
   );
 }

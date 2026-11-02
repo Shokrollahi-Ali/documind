@@ -70,7 +70,7 @@ All settings are server-only environment variables.
 ## Behaviour worth knowing
 
 - The document list refreshes every 3 seconds while any document on the page is still preparing, and pauses while the browser tab is hidden.
-- Questions are independent. The backend keeps no conversation history, so questions and answers stay on screen until you switch document or reload the page.
+- Questions are independent. Each document’s questions and answers stay in workspace memory while you switch documents. History is cleared on reload or sign-out, and deleting a document clears its history. History is not saved to browser storage or the backend.
 - The answer text from the model contains markers like `[chunk 3]`. The app turns them into numbered source buttons and drops any marker that has no matching source.
 - A 401 from any request returns the user to the sign-in screen with a message.
 

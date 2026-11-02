@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type { DocumentMetadata } from "../lib/document";
 import DocumentPanel from "./document-panel";
@@ -19,7 +19,7 @@ function createDocument(status: DocumentMetadata["status"]): DocumentMetadata {
 function renderPanel(document: DocumentMetadata | null) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <DocumentPanel document={document} />
+      <DocumentPanel document={document} history={{ getTurns: () => [], addTurn: vi.fn(), clearTurns: vi.fn() }} />
     </QueryClientProvider>,
   );
 }
