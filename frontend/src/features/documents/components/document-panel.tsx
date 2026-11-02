@@ -2,6 +2,7 @@ import type { ConversationHistory } from "../hooks/use-conversation-history";
 import type { DocumentMetadata } from "../lib/document";
 import { getDocumentStage } from "../lib/document-status";
 import QuestionPanel from "./question-panel";
+import styles from "./document-workspace.module.css";
 
 export default function DocumentPanel({ document, history }: {
   document: DocumentMetadata | null;
@@ -18,8 +19,8 @@ export default function DocumentPanel({ document, history }: {
   const stage = getDocumentStage(document.status);
 
   return (
-    <section aria-labelledby="selected-document-heading">
-      <h2 id="selected-document-heading" className="break-all text-xl font-medium">
+    <section aria-labelledby="selected-document-heading" className={styles.documentPanel}>
+      <h2 id="selected-document-heading" className="shrink-0 break-all text-xl font-medium">
         {document.original_filename}
       </h2>
       {stage === "preparing" && (

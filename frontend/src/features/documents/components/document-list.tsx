@@ -14,6 +14,7 @@ import type { DocumentMetadata } from "../lib/document";
 import DocumentListItem from "./document-list-item";
 import DocumentPagination from "./document-pagination";
 import DocumentUpload from "./document-upload";
+import styles from "./document-workspace.module.css";
 
 const noticeDurationMs = 5000;
 
@@ -76,7 +77,7 @@ export default function DocumentList({
     : "No documents on this page. Return to the previous page.";
 
   return (
-    <section ref={panelRef} aria-labelledby="your-documents-heading" className="min-w-0 self-start">
+    <section ref={panelRef} aria-labelledby="your-documents-heading" className={styles.documentList}>
       <div className="flex flex-wrap items-center gap-1.5">
         <h2 ref={heading} id="your-documents-heading" tabIndex={-1} className="mr-auto text-lg font-medium focus:outline-none">Your documents</h2>
         <Button
@@ -109,7 +110,9 @@ export default function DocumentList({
           ))}
         </ul>
       )}
-      <DocumentPagination page={page} canGoPrevious={canGoPrevious} canGoNext={canGoNext} onPageChange={onPageChange} />
+      <div className={styles.paginationFooter}>
+        <DocumentPagination page={page} canGoPrevious={canGoPrevious} canGoNext={canGoNext} onPageChange={onPageChange} />
+      </div>
     </section>
   );
 }

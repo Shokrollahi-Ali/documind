@@ -61,6 +61,15 @@
   margin-top: 1rem;
   font-size: 0.9375rem;
 }
+@media (min-width: 48rem) {
+  .shell:has([data-document-workspace]) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .topBar { flex-shrink: 0; }
+}
 @media (max-width: 480px) {
   .shell { padding: 1rem 1rem 3rem; }
   .account { justify-content: space-between; }

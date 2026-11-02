@@ -1,0 +1,87 @@
+.workspace {
+  --composer-padding: 0.25rem;
+  --counter-height: 1.25rem;
+  --counter-gap: 0.25rem;
+  display: grid;
+  gap: 2rem;
+  min-height: 0;
+  margin-top: 2rem;
+}
+
+.documentPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+}
+
+.documentList {
+  min-width: 0;
+}
+
+.paginationFooter {
+  display: flow-root;
+}
+
+.questionPanel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.messages {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding: 0.25rem;
+}
+
+.messages:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.composer {
+  min-width: 0;
+  padding: var(--composer-padding, 0.25rem);
+  background: var(--background);
+}
+
+.questionCounter {
+  height: var(--counter-height, 1.25rem);
+  line-height: var(--counter-height, 1.25rem);
+  margin-top: var(--counter-gap, 0.25rem);
+}
+
+@media (min-width: 48rem) {
+  .workspace {
+    flex: 1;
+    grid-template-columns: 20rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .documentPanel {
+    height: 100%;
+  }
+
+  .documentList {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .documentList > * {
+    flex-shrink: 0;
+  }
+
+  .paginationFooter {
+    margin-top: auto;
+    padding-bottom: calc(var(--composer-padding) + var(--counter-height) + var(--counter-gap));
+  }
+}

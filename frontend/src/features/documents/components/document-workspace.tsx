@@ -11,6 +11,7 @@ import { useSelectedDocument } from "../hooks/use-selected-document";
 import type { DocumentMetadata } from "../lib/document";
 import DocumentList from "./document-list";
 import DocumentPanel from "./document-panel";
+import styles from "./document-workspace.module.css";
 
 function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void }) {
   const queryClient = useQueryClient();
@@ -41,7 +42,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
   }
 
   return (
-    <div className="mt-8 grid gap-8 md:grid-cols-[20rem_minmax(0,1fr)]">
+    <div data-document-workspace className={styles.workspace}>
       <DocumentList
         documents={documents}
         page={page}

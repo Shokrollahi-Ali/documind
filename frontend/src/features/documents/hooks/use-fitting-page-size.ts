@@ -18,11 +18,13 @@ export function useFittingPageSize(hasDocuments: boolean, onPageSizeChange: (pag
       const gap = Number.parseFloat(getComputedStyle(list).rowGap) || 0;
       const footerHeight = pagination.getBoundingClientRect().height;
       const footerMargin = Number.parseFloat(getComputedStyle(pagination).marginTop) || 0;
+      const footer = pagination.parentElement;
+      const footerPadding = footer ? Number.parseFloat(getComputedStyle(footer).paddingBottom) || 0 : 0;
       const main = panel.closest("main");
       const bottomPadding = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
       const listTop = list.getBoundingClientRect().top + window.scrollY;
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const availableHeight = viewportHeight - listTop - footerHeight - footerMargin - bottomPadding;
+      const availableHeight = viewportHeight - listTop - footerHeight - footerMargin - footerPadding - bottomPadding;
       const itemsThatFit = Math.floor((availableHeight + gap) / (itemHeight + gap));
 
       onPageSizeChange(Math.max(1, Math.min(100, itemsThatFit)));

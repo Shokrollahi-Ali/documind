@@ -5,6 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 
 import Button from "@/components/button";
 import { formatQuestionCounter, validateQuestion } from "../lib/question";
+import styles from "./document-workspace.module.css";
 
 export default function QuestionForm({ isAsking, errorMessage, onAsk }: {
   isAsking: boolean;
@@ -35,6 +36,7 @@ export default function QuestionForm({ isAsking, errorMessage, onAsk }: {
 
   return (
     <form onSubmit={handleSubmit} aria-busy={isAsking}>
+      {shownError && <p role="alert" className="mb-1 text-sm text-red-700 dark:text-red-400">{shownError}</p>}
       <label htmlFor={inputId} className="text-sm text-zinc-600 dark:text-zinc-400">
         Your question
       </label>
@@ -53,9 +55,8 @@ export default function QuestionForm({ isAsking, errorMessage, onAsk }: {
           {isAsking ? "Asking…" : "Ask"}
         </Button>
       </div>
-      <div className="mt-1 flex items-start justify-between gap-2 text-sm">
-        {shownError && <p role="alert" className="text-red-700 dark:text-red-400">{shownError}</p>}
-        <span className="ml-auto tabular-nums text-zinc-600 dark:text-zinc-400">{formatQuestionCounter(draft)}</span>
+      <div className={`${styles.questionCounter} text-right text-sm tabular-nums text-zinc-600 dark:text-zinc-400`}>
+        {formatQuestionCounter(draft)}
       </div>
     </form>
   );
