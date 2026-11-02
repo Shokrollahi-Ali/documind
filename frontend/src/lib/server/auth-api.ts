@@ -4,7 +4,6 @@ import { validateMutationOrigin } from "@/lib/server/request-origin";
 import { copySessionCookies, getSessionHeaders } from "@/lib/server/session-cookies";
 
 type AuthAction = "register" | "login" | "me" | "logout";
-const MAX_AUTH_BODY_BYTES = 16 * 1024;
 
 export async function proxyAuthRequest(request: Request, action: AuthAction): Promise<Response> {
   const method = action === "me" ? "GET" : "POST";
@@ -27,7 +26,7 @@ export async function proxyAuthRequest(request: Request, action: AuthAction): Pr
 
   let body: string | undefined;
   if (action === "register" || action === "login") {
-    const parsedBody = await readJsonBody(request, MAX_AUTH_BODY_BYTES);
+    const parsedBody = await readJsonBody(request);
     if (parsedBody instanceof Response) return parsedBody;
     body = parsedBody;
     headers.set("Content-Type", "application/json");

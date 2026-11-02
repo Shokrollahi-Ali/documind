@@ -1,6 +1,7 @@
 import { checkSession } from "@/lib/client/session-expired";
 import { isDocumentMetadata } from "../lib/document";
 import type { DocumentMetadata } from "../lib/document";
+import { documentsPath } from "./document-routes";
 
 function getUploadError(payload: unknown): string {
   if (
@@ -20,7 +21,7 @@ export async function uploadDocument(file: File): Promise<DocumentMetadata> {
 
   let response: Response;
   try {
-    response = await fetch("/api/documents", {
+    response = await fetch(documentsPath, {
       method: "POST",
       body: formData,
     });

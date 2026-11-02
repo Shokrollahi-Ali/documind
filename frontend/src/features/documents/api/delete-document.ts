@@ -1,8 +1,10 @@
 import { checkSession } from "@/lib/client/session-expired";
+import { getDocumentPath } from "./document-routes";
+
 export async function deleteDocument(documentId: string): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
+    response = await fetch(getDocumentPath(documentId), {
       method: "DELETE",
       cache: "no-store",
     });

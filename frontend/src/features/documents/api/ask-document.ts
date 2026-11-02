@@ -1,6 +1,7 @@
 import { checkSession } from "@/lib/client/session-expired";
 import { isDocumentAnswer } from "../lib/document-answer";
 import type { DocumentAnswer } from "../lib/document-answer";
+import { getDocumentAnswerPath } from "./document-routes";
 
 function getAnswerError(payload: unknown): string {
   if (
@@ -16,7 +17,7 @@ function getAnswerError(payload: unknown): string {
 export async function askDocument(documentId: string, question: string): Promise<DocumentAnswer> {
   let response: Response;
   try {
-    response = await fetch(`/api/documents/${encodeURIComponent(documentId)}/answer`, {
+    response = await fetch(getDocumentAnswerPath(documentId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
