@@ -14,6 +14,8 @@ export function getApiUrl(path: string): URL {
 }
 
 const maximumTimeoutMs = 2147483647;
+const defaultApiTimeoutMs = 10000;
+const defaultAnswerTimeoutMs = 100000;
 
 function readTimeoutMs(variableName: string, defaultTimeoutMs: number): number {
   const timeoutMs = Number(process.env[variableName] ?? defaultTimeoutMs);
@@ -24,9 +26,9 @@ function readTimeoutMs(variableName: string, defaultTimeoutMs: number): number {
 }
 
 export function getApiTimeoutMs(): number {
-  return readTimeoutMs("DOCUMIND_API_TIMEOUT_MS", 10000);
+  return readTimeoutMs("DOCUMIND_API_TIMEOUT_MS", defaultApiTimeoutMs);
 }
 
 export function getAnswerTimeoutMs(): number {
-  return readTimeoutMs("DOCUMIND_ANSWER_TIMEOUT_MS", 100000);
+  return readTimeoutMs("DOCUMIND_ANSWER_TIMEOUT_MS", defaultAnswerTimeoutMs);
 }

@@ -1,8 +1,13 @@
+export const maxJsonBodyBytes = 16 * 1024;
+
 export function jsonError(detail: string, status: number): Response {
   return Response.json({ detail }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-export async function readJsonBody(request: Request, maxBytes: number): Promise<string | Response> {
+export async function readJsonBody(
+  request: Request,
+  maxBytes: number = maxJsonBodyBytes,
+): Promise<string | Response> {
   const contentType = request.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
   if (contentType !== "application/json") {
     return jsonError("A JSON request body is required.", 415);

@@ -3,8 +3,6 @@ import { jsonError, readJsonBody } from "@/lib/server/json-request";
 import { validateMutationOrigin } from "@/lib/server/request-origin";
 import { getSessionHeaders } from "@/lib/server/session-cookies";
 
-const MAX_QUESTION_BODY_BYTES = 16 * 1024;
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ documentId: string }> },
@@ -25,7 +23,7 @@ export async function POST(
     return jsonError("Document questions are not configured.", 503);
   }
 
-  const body = await readJsonBody(request, MAX_QUESTION_BODY_BYTES);
+  const body = await readJsonBody(request);
   if (body instanceof Response) return body;
   headers.set("Content-Type", "application/json");
 
