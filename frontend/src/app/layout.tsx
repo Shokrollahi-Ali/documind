@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Documind",
-  description: "Upload and manage your PDF documents.",
+  description: "Ask questions about your PDF documents.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -8,6 +8,7 @@ import { getCurrentUser, logout } from "../api/auth";
 import type { User } from "../api/auth";
 import AuthForm from "./auth-form";
 import styles from "./auth.module.css";
+import TopBar from "./top-bar";
 
 function SessionContent() {
   const queryClient = useQueryClient();
@@ -49,27 +50,31 @@ function SessionContent() {
     }
   }
 
-  if (session.isPending) return <p role="status" className={styles.notice}>Checking your session…</p>;
-  if (session.isError) return (
-    <section className={styles.card}>
-      <h1>Unable to check your session</h1>
-      <p role="alert" className={styles.notice}>Check your connection and try again.</p>
-      <Button onClick={() => void session.refetch()} disabled={session.isFetching}>Try again</Button>
-    </section>
-  );
-  if (!session.data) return <AuthForm onSignedIn={setSession} notice={notice} />;
+  function renderBody() {
+    if (session.isPending) return <p role="status" className={styles.notice}>Checking your session…</p>;
+    if (session.isError) return (
+      <section className={styles.card}>
+        <h1>Unable to check your session</h1>
+        <p role="alert" className={styles.notice}>Check your connection and try again.</p>
+        <Button onClick={() => void session.refetch()} disabled={session.isFetching}>Try again</Button>
+      </section>
+    );
+    if (!session.data) return <AuthForm onSignedIn={setSession} notice={notice} />;
+    if (signingOut) return <p role="status" className={styles.notice}>Signing out…</p>;
+
+    return (
+      <>
+        <h1 className="sr-only">Documind workspace</h1>
+        <DocumentWorkspace key={session.data.id} onSessionExpired={handleSessionExpired} />
+      </>
+    );
+  }
 
   return (
     <>
-      <header className={styles.workspaceHeader}>
-        <h1>Your documents</h1>
-        <div className={styles.account}>
-          <span>{session.data.email}</span>
-          <Button onClick={() => void handleLogout()} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</Button>
-        </div>
-      </header>
+      <TopBar user={session.data ?? undefined} isSigningOut={signingOut} onSignOut={() => void handleLogout()} />
       {logoutError && <p role="alert" className={styles.error}>{logoutError}</p>}
-      {signingOut ? <p role="status">Signing out…</p> : <DocumentWorkspace key={session.data.id} onSessionExpired={handleSessionExpired} />}
+      {renderBody()}
     </>
   );
 }
@@ -78,7 +83,6 @@ export default function AuthenticatedWorkspace() {
   const [queryClient] = useState(() => new QueryClient());
   return (
     <main className={styles.shell}>
-      <p className={styles.brand}>Documind</p>
       <QueryClientProvider client={queryClient}><SessionContent /></QueryClientProvider>
     </main>
   );

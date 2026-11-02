@@ -106,7 +106,7 @@ describe("document workspace", () => {
 
     await user.upload(screen.getByLabelText("PDF document"), new File(["pdf"], "new.pdf", { type: "application/pdf" }));
 
-    const list = screen.getByRole("region", { name: "Saved documents" });
+    const list = screen.getByRole("region", { name: "Your documents" });
     expect(await within(list).findByRole("heading", { name: "new.pdf" })).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "new.pdf" })).toBeInTheDocument();
@@ -147,7 +147,7 @@ it("disables confirmation while deleting and refreshes the list on success", asy
   completeDeletion(new Response(null, { status: 204 }));
   expect(await screen.findByText("Document deleted.")).toBeInTheDocument();
   expect(await screen.findByText("No documents yet. Upload a PDF to get started.")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Saved documents" })).toHaveFocus();
+  expect(screen.getByRole("heading", { name: "Your documents" })).toHaveFocus();
 });
 
 it("clears the deletion message after a few seconds", async () => {

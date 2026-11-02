@@ -49,9 +49,8 @@ export default function AuthForm({ onSignedIn, notice }: { onSignedIn: (user: Us
 
   return (
     <section className={styles.card} aria-labelledby="auth-heading">
-      <p className={styles.eyebrow}>Your document workspace</p>
       <h1 id="auth-heading">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
-      <p className={styles.description}>{mode === "login" ? "Sign in to upload and manage your PDFs." : "Keep your documents together in your own workspace."}</p>
+      <p className={styles.description}>{mode === "login" ? "Sign in to ask questions about your PDFs." : "Keep your documents together in your own workspace."}</p>
       {message && <p role="status" className={styles.notice}>{message}</p>}
       <form onSubmit={handleSubmit} aria-busy={pending}>
         <fieldset disabled={pending} className={styles.fields}>
@@ -61,12 +60,12 @@ export default function AuthForm({ onSignedIn, notice }: { onSignedIn: (user: Us
           <input id="auth-password" name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "register" ? 15 : 1} maxLength={128} aria-describedby={mode === "register" ? "password-help" : undefined} value={password} onChange={(event) => setPassword(event.target.value)} />
           {mode === "register" && <p id="password-help" className={styles.help}>Use 15–128 characters. A long passphrase works well.</p>}
           {error && <p role="alert" className={styles.error}>{error}</p>}
-          <Button type="submit" variant="primary">{pending ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}</Button>
+          <Button type="submit" variant="primary" className="w-full">{pending ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}</Button>
         </fieldset>
       </form>
       <div className={styles.switchMode}>
         <span>{mode === "login" ? "New to Documind?" : "Already have an account?"}</span>
-        <Button onClick={changeMode} disabled={pending}>{mode === "login" ? "Create an account" : "Back to sign in"}</Button>
+        <Button size="sm" onClick={changeMode} disabled={pending}>{mode === "login" ? "Create an account" : "Back to sign in"}</Button>
       </div>
     </section>
   );

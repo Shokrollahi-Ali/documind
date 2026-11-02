@@ -70,9 +70,9 @@ export default function DocumentList({
     : "No documents on this page. Return to the previous page.";
 
   return (
-    <section aria-labelledby="saved-documents-heading">
+    <section aria-labelledby="your-documents-heading">
       <div className="flex flex-wrap items-center gap-1.5">
-        <h2 ref={heading} id="saved-documents-heading" tabIndex={-1} className="mr-auto text-base font-medium focus:outline-none">Saved documents</h2>
+        <h2 ref={heading} id="your-documents-heading" tabIndex={-1} className="mr-auto text-base font-medium focus:outline-none">Your documents</h2>
         <Button
           size="icon"
           aria-label={isRefreshing ? "Refreshing…" : "Refresh list"}

@@ -1,78 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Documind frontend
 
-## Getting Started
+The web app for Documind, built with Next.js (App Router), TypeScript, Tailwind CSS and TanStack Query. Signed-in users upload PDFs, see how far each one is in processing, and ask questions about a document once it is ready. Answers cite the pages they came from.
 
-First, run the development server:
+The browser never talks to the FastAPI backend directly. It calls this app's own `/api` routes, which forward the request to FastAPI.
+
+## What you can do
+
+- Create an account, sign in and sign out. The session lives in an HttpOnly cookie, so no token is kept in JavaScript or browser storage.
+- Upload one PDF at a time. The upload starts as soon as a file is chosen.
+- See your documents, newest first, ten per page. Each document shows one of three states: Preparing, Ready to ask, or Couldn’t process.
+- Delete a document after confirming in a dialog.
+- Select a ready document and ask questions. Each answer shows numbered sources that open to the page number and the exact passage.
+
+## Running it locally
+
+Use Node.js 24. The backend and its services must be running first:
+
+- `docker compose up -d` from the repository root starts PostgreSQL, Redis and LocalStack.
+- The FastAPI API must be running.
+- The dispatcher and the worker must be running, or uploaded documents stay on Preparing. Run each in its own terminal:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd backend && PYTHONPATH=src uv run python -m documind.dispatcher
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+cd backend && PYTHONPATH=src uv run celery -A documind.worker worker --loglevel=INFO
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To ask questions, the backend also needs `DOCUMIND_OPENAI_API_KEY` and `DOCUMIND_ANSWER_MODEL`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Document uploads
-
-The homepage lets you select, replace, remove, and upload one PDF. It displays the saved document metadata after a successful upload. The Saved documents list loads persisted metadata from FastAPI, newest first, with ten documents per page. It remains available after a reload and refreshes after successful uploads. TanStack Query manages the list cache; the file selection stays in local React state.
-
-Copy `.env.example` to `.env.local` in the frontend directory, then set `DOCUMIND_API_URL` to your FastAPI service URL. This variable is server-only. `DOCUMIND_UPLOAD_TIMEOUT_MS` controls the upstream upload timeout and defaults to 120000 milliseconds. List requests use `DOCUMIND_API_TIMEOUT_MS`, defaulting to 10000 milliseconds. Restart the development server after configuration changes.
+Then start the frontend from the `frontend` directory:
 
 ```bash
 cp .env.example .env.local
 npm run dev
 ```
 
-The browser sends multipart data to the same-origin `/api/documents` route. Next.js streams the file to FastAPI's `/documents` endpoint, preserving backend validation errors. PostgreSQL, S3 storage, and FastAPI must be running. The backend remains responsible for upload size limits and actual PDF content validation. Browser checks are only early feedback.
+Restart the dev server after changing any setting.
 
-Uploads are never retried automatically because an interrupted response does not guarantee that the backend did not save the file. Deployment proxies must permit the configured upload size and duration. Document processing and question answering are separate milestones.
+## Configuration
 
-## Authentication proxy
+All settings are server-only environment variables.
 
-Next.js exposes `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, and `POST /api/auth/logout`. These routes forward requests to the corresponding FastAPI `/auth` endpoints. Register and login accept JSON bodies up to 16 KiB. Authentication responses are not cached, and requests are not retried automatically.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DOCUMIND_API_URL` | none, required | Address of the FastAPI service. |
+| `DOCUMIND_API_TIMEOUT_MS` | `10000` | Time limit for sign-in, document list and delete requests. |
+| `DOCUMIND_UPLOAD_TIMEOUT_MS` | `120000` | Time limit for uploads. |
+| `DOCUMIND_ANSWER_TIMEOUT_MS` | `100000` | Time limit for answers. Keep it above the backend's embedding and answer timeouts added together. |
+| `DOCUMIND_APP_ORIGIN` | request origin in development | Public address of this app. Required in production, including behind a reverse proxy. |
+| `DOCUMIND_SESSION_COOKIE_NAME` | `documind_session` | Must match the backend setting. |
 
-The proxy preserves the backend session cookie and its attributes when logging in or out. Auth and document requests forward only the configured session cookie to FastAPI. Set `DOCUMIND_SESSION_COOKIE_NAME` to the same value in the frontend and backend; both default to `documind_session`. Configure the backend production environment to issue Secure cookies and serve the application over HTTPS.
+## How requests flow
 
-Set `DOCUMIND_APP_ORIGIN` to the public frontend origin, such as `http://localhost:3000` locally or `https://app.example.com` in production. This is required in production, including behind a reverse proxy. In development, an omitted value defaults to the request URL's origin. Restart Next.js after changing environment variables.
+| Browser calls | Forwards to FastAPI |
+| --- | --- |
+| `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | `/auth/...` |
+| `GET /api/documents`, `POST /api/documents` | `/documents` |
+| `DELETE /api/documents/{id}` | `/documents/{id}` |
+| `POST /api/documents/{id}/answer` | `/documents/{id}/answer` |
 
-All auth POST requests, document uploads, and document deletions require an `Origin` header matching that origin. Browser requests from the same frontend supply it automatically; HTTP scripts must supply it explicitly. Cross-origin mutations are rejected before reaching FastAPI. Deployments should keep FastAPI internal to the application network.
+- Only the session cookie is forwarded to FastAPI, and cookie attributes from the backend are passed back unchanged.
+- Every request that changes something must carry an `Origin` header matching `DOCUMIND_APP_ORIGIN`. Browsers add it automatically, and other clients must send it. Other origins are rejected before they reach FastAPI.
+- JSON request bodies are limited to 16 KiB. The backend still enforces its own limits, including the upload size and the PDF check.
+- Nothing is retried automatically. An interrupted upload or delete may have succeeded, so the user is asked to check the list first.
+- Keep FastAPI on your internal network and expose only this app.
 
-## Signing in
+## Behaviour worth knowing
 
-The homepage checks the current session before mounting the document workspace. Signed-out users can sign in or create an account. Registration returns to sign-in with a confirmation message; it does not create a session automatically. Passwords must meet the backend's 15–128 character registration requirement.
+- The document list refreshes every 3 seconds while any document on the page is still preparing, and pauses while the browser tab is hidden.
+- Questions are independent. The backend keeps no conversation history, so questions and answers stay on screen until you switch document or reload the page.
+- The answer text from the model contains markers like `[chunk 3]`. The app turns them into numbered source buttons and drops any marker that has no matching source.
+- A 401 from any request returns the user to the sign-in screen with a message.
 
-Signed-in users see their email and a sign-out button. Reloading restores the session through the HttpOnly cookie. The frontend keeps no session token in JavaScript or browser storage. Session checks also refresh when the tab becomes visible again. A 401 from a document request returns to sign-in; a failed session check instead offers a retry.
+## Project structure
 
-Signing out or changing accounts unmounts the document workspace and clears its query cache and file selection. Failed sign-out requests display a retryable error. FastAPI remains responsible for enforcing authorization on every document operation.
+- `src/app`: the page and the `/api` route handlers.
+- `src/components`: shared interface pieces, such as the button and the icons.
+- `src/features/auth`: sign-in, sign-up and the top bar.
+- `src/features/documents`: `api` for requests to the app's routes, `components` for the screens, `hooks` for shared logic and `lib` for plain functions and types.
+- `src/lib/server`: helpers used only by the route handlers, such as configuration, origin checks and cookie handling.
+- `src/lib/client`: helpers used by the browser code.
 
-The authentication screens use CSS Modules. Component and API tests cover registration, sign-in/out, pending requests, validation errors, session failures, expiration, and account cache isolation.
+## Checks
 
-## Frontend checks
-
-Use Node.js 24. Run from the `frontend` directory:
+Run these from the `frontend` directory:
 
 ```bash
 npm run lint
@@ -81,8 +94,4 @@ npm run typecheck
 npm run build
 ```
 
-Component tests use Vitest, React Testing Library, and jsdom. They exercise selection, replacement, removal, upload states, and validation feedback. Node-environment tests verify multipart forwarding, backend errors, timeouts, and upload response validation.
-
-## Document list API
-
-`GET /documents?limit=10&offset=0` returns `items`, `has_more`, `limit`, and `offset`. Limits range from 1 to 100. Documents are ordered by creation time descending, then ID descending to break ties. Offset pagination is not a snapshot: concurrent uploads can shift page boundaries. Uploading from this page resets the list to its first page.
+Tests use Vitest, React Testing Library and jsdom for components, and plain Node for route handlers and helpers.
