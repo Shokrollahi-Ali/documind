@@ -1,5 +1,6 @@
 import type { DocumentMetadata } from "../lib/document";
 import { getDocumentStage } from "../lib/document-status";
+import QuestionPanel from "./question-panel";
 
 export default function DocumentPanel({ document }: { document: DocumentMetadata | null }) {
   if (!document) {
@@ -22,6 +23,7 @@ export default function DocumentPanel({ document }: { document: DocumentMetadata
           This document is still being prepared. This page updates by itself, and you can ask questions once it’s ready.
         </p>
       )}
+      {stage === "ready" && <QuestionPanel key={document.id} documentId={document.id} />}
       {stage === "failed" && (
         <>
           <p className="mt-3 text-sm text-red-700 dark:text-red-400">

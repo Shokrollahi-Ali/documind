@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
@@ -15,38 +16,50 @@ function createDocument(status: DocumentMetadata["status"]): DocumentMetadata {
   };
 }
 
+function renderPanel(document: DocumentMetadata | null) {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <DocumentPanel document={document} />
+    </QueryClientProvider>,
+  );
+}
+
 it("asks the user to pick a document when none is selected", () => {
-  render(<DocumentPanel document={null} />);
+  renderPanel(null);
 
   expect(screen.getByText("Select a document from the list, or upload a new one.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Your question")).not.toBeInTheDocument();
 });
 
 it("shows the name of the selected document", () => {
-  render(<DocumentPanel document={createDocument("ready")} />);
+  renderPanel(createDocument("ready"));
 
   expect(screen.getByRole("heading", { level: 2, name: "report.pdf" })).toBeInTheDocument();
 });
 
 it.each(["uploaded", "processing", "extracted", "chunked"] as const)(
-  "explains that a %s document is still being prepared",
+  "explains that a %s document is still being prepared and cannot be asked yet",
   (status) => {
-    render(<DocumentPanel document={createDocument(status)} />);
+    renderPanel(createDocument(status));
 
     expect(screen.getByRole("status")).toHaveTextContent("still being prepared");
+    expect(screen.queryByLabelText("Your question")).not.toBeInTheDocument();
   },
 );
 
 it("explains why a failed document cannot be used", () => {
-  render(<DocumentPanel document={createDocument("failed")} />);
+  renderPanel(createDocument("failed"));
 
   expect(screen.getByText(/couldn’t be processed/)).toBeInTheDocument();
   expect(screen.getByText(/Scanned or password-protected PDFs/)).toBeInTheDocument();
   expect(screen.getByText("Delete it from the list and upload a different file.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Your question")).not.toBeInTheDocument();
 });
 
-it("shows no preparing or failure message for a ready document", () => {
-  render(<DocumentPanel document={createDocument("ready")} />);
+it("offers the question box for a ready document", () => {
+  renderPanel(createDocument("ready"));
 
+  expect(screen.getByLabelText("Your question")).toBeInTheDocument();
   expect(screen.queryByText(/still being prepared/)).not.toBeInTheDocument();
   expect(screen.queryByText(/couldn’t be processed/)).not.toBeInTheDocument();
 });

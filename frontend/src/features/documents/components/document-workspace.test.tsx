@@ -337,3 +337,72 @@ describe("document selection", () => {
     expect(screen.getByText("Select a document from the list, or upload a new one.")).toBeInTheDocument();
   });
 });
+
+describe("asking questions", () => {
+  const readyDocument = { ...document, status: "ready" as DocumentMetadata["status"] };
+  const answer = {
+    answer: "Sixty days [chunk 1].",
+    sources: [{ chunk_index: 1, page_number: 4, text: "Sixty days notice." }],
+  };
+
+  it("lets the user ask a question about a ready document", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(
+      url === `/api/documents/${readyDocument.id}/answer`
+        ? Response.json(answer)
+        : pageResponse([readyDocument]),
+    )));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+
+    await user.type(screen.getByLabelText("Your question"), "What is the notice period?");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByRole("button", { name: "Source 1" })).toBeInTheDocument();
+    expect(screen.getByText("What is the notice period?")).toBeInTheDocument();
+  });
+
+  it("does not offer questions until the document is ready", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(pageResponse())));
+    render(<DocumentWorkspace />);
+
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+
+    expect(screen.queryByLabelText("Your question")).not.toBeInTheDocument();
+  });
+
+  it("offers the question box once a preparing document becomes ready", async () => {
+    const user = userEvent.setup();
+    let status: DocumentMetadata["status"] = "processing";
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(
+      pageResponse([{ ...document, status }]),
+    )));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+    expect(screen.queryByLabelText("Your question")).not.toBeInTheDocument();
+
+    status = "ready";
+    await user.click(screen.getByRole("button", { name: "Refresh list" }));
+
+    expect(await screen.findByLabelText("Your question")).toBeInTheDocument();
+  });
+
+  it("starts a fresh conversation when another document is selected", async () => {
+    const user = userEvent.setup();
+    const otherDocument = { ...readyDocument, id: "other-id", original_filename: "other.pdf" };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(
+      url.endsWith("/answer") ? Response.json(answer) : pageResponse([readyDocument, otherDocument]),
+    )));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+    await user.type(screen.getByLabelText("Your question"), "What is the notice period?");
+    await user.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByRole("button", { name: "Source 1" });
+
+    await user.click(screen.getByRole("button", { name: "other.pdf" }));
+
+    expect(screen.queryByRole("button", { name: "Source 1" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Ask anything about this document/)).toBeInTheDocument();
+  });
+});
