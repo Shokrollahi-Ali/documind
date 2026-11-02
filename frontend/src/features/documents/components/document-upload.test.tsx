@@ -1,7 +1,8 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
+import { SessionExpiredError } from "@/lib/client/session-expired";
 import { uploadDocument } from "../api/upload-document";
 
 import DocumentUpload from "./document-upload";
@@ -25,118 +26,107 @@ function createPdf(name = "report.pdf") {
   return new File(["PDF content"], name, { type: "application/pdf" });
 }
 
-describe("document selection", () => {
-  it("starts with a labelled file picker and no selected document", () => {
-    render(<DocumentUpload />);
+it("offers an Upload button and a labelled input that accepts PDFs", () => {
+  render(<DocumentUpload />);
 
-    expect(screen.getByLabelText("PDF document")).toHaveAttribute("accept", ".pdf,application/pdf");
-    expect(screen.getByRole("status")).toHaveTextContent("No document selected.");
-    expect(screen.queryByRole("button", { name: "Remove selection" })).not.toBeInTheDocument();
-  });
-
-  it("shows the selected filename and size and allows replacing it", async () => {
-    const user = userEvent.setup();
-    render(<DocumentUpload />);
-    const input = screen.getByLabelText("PDF document");
-
-    await user.upload(input, createPdf());
-    expect(screen.getByRole("status")).toHaveTextContent("Selected: report.pdf");
-    expect(screen.getByText("11 bytes")).toBeInTheDocument();
-
-    await user.upload(input, createPdf("replacement.PDF"));
-    expect(screen.getByRole("status")).toHaveTextContent("Selected: replacement.PDF");
-    expect(screen.queryByText("Selected: report.pdf")).not.toBeInTheDocument();
-  });
-
-  it("clears the input, restores focus, and allows selecting the same file again", async () => {
-    const user = userEvent.setup();
-    render(<DocumentUpload />);
-    const input = screen.getByLabelText("PDF document");
-    const file = createPdf();
-
-    await user.upload(input, file);
-    await user.click(screen.getByRole("button", { name: "Remove selection" }));
-
-    expect(input).toHaveValue("");
-    expect(input).toHaveFocus();
-    expect(screen.getByRole("status")).toHaveTextContent("No document selected.");
-
-    await user.upload(input, file);
-    expect(screen.getByRole("status")).toHaveTextContent("Selected: report.pdf");
-  });
-
-  it("rejects invalid selections and recovers when a valid PDF is selected", async () => {
-    const user = userEvent.setup({ applyAccept: false });
-    render(<DocumentUpload />);
-    const input = screen.getByLabelText("PDF document");
-
-    await user.upload(input, createPdf());
-    await user.upload(input, new File(["text"], "notes.txt", { type: "text/plain" }));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Choose a PDF document.");
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input).toHaveValue("");
-    expect(screen.getByRole("status")).toHaveTextContent("No document selected.");
-
-    await user.upload(input, createPdf());
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(input).toHaveAttribute("aria-invalid", "false");
-  });
-
-  it("rejects an empty PDF", async () => {
-    const user = userEvent.setup();
-    render(<DocumentUpload />);
-
-    await user.upload(screen.getByLabelText("PDF document"), new File([], "empty.pdf", { type: "application/pdf" }));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("The selected document is empty.");
-    expect(screen.queryByRole("button", { name: "Remove selection" })).not.toBeInTheDocument();
-  });
+  expect(screen.getByRole("button", { name: "Upload" })).toBeEnabled();
+  expect(screen.getByLabelText("PDF document")).toHaveAttribute("accept", ".pdf,application/pdf");
 });
 
+it("opens the file picker when Upload is clicked", async () => {
+  const user = userEvent.setup();
+  const onPickerOpened = vi.fn();
+  render(<DocumentUpload />);
+  screen.getByLabelText("PDF document").addEventListener("click", onPickerOpened);
 
-describe("document upload interaction", () => {
-  it("disables uploading until a valid file is selected", () => {
-    render(<DocumentUpload />);
-    expect(screen.getByRole("button", { name: "Upload document" })).toBeDisabled();
-  });
+  await user.click(screen.getByRole("button", { name: "Upload" }));
 
-  it("prevents duplicate submissions while pending and confirms success", async () => {
-    const user = userEvent.setup();
-    let finishUpload!: (value: typeof uploadedDocument) => void;
-    vi.mocked(uploadDocument).mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
-    render(<DocumentUpload />);
-    const input = screen.getByLabelText("PDF document");
-    await user.upload(input, createPdf());
-    await user.dblClick(screen.getByRole("button", { name: "Upload document" }));
+  expect(onPickerOpened).toHaveBeenCalledTimes(1);
+});
 
-    expect(uploadDocument).toHaveBeenCalledTimes(1);
-    expect(input).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Remove selection" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Uploading…" })).toBeDisabled();
+it("uploads the selected PDF right away and tells the workspace", async () => {
+  const user = userEvent.setup();
+  vi.mocked(uploadDocument).mockResolvedValue(uploadedDocument);
+  const onUploaded = vi.fn();
+  render(<DocumentUpload onUploaded={onUploaded} />);
+  const file = createPdf();
 
-    await act(async () => finishUpload(uploadedDocument));
+  await user.upload(screen.getByLabelText("PDF document"), file);
 
-    expect(screen.getByRole("status")).toHaveTextContent("uploaded successfully");
-    expect(input).toHaveValue("");
-    expect(input).toBeEnabled();
-  });
+  expect(uploadDocument).toHaveBeenCalledWith(file);
+  await waitFor(() => expect(onUploaded).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
 
-  it("keeps the selected PDF after an error and permits an explicit retry", async () => {
-    const user = userEvent.setup();
-    vi.mocked(uploadDocument)
-      .mockRejectedValueOnce(new Error("Document storage is temporarily unavailable"))
-      .mockResolvedValueOnce(uploadedDocument);
-    render(<DocumentUpload />);
-    await user.upload(screen.getByLabelText("PDF document"), createPdf());
-    await user.click(screen.getByRole("button", { name: "Upload document" }));
+it("shows progress and blocks another upload while one is running", async () => {
+  const user = userEvent.setup();
+  let finishUpload!: (value: typeof uploadedDocument) => void;
+  vi.mocked(uploadDocument).mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
+  render(<DocumentUpload />);
+  const input = screen.getByLabelText("PDF document");
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Document storage is temporarily unavailable");
-    expect(screen.getByRole("status")).toHaveTextContent("Selected: report.pdf");
-    expect(screen.getByRole("button", { name: "Upload document" })).toBeEnabled();
+  await user.upload(input, createPdf());
 
-    await user.click(screen.getByRole("button", { name: "Upload document" }));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("uploaded successfully");
-  });
+  expect(screen.getByRole("button", { name: "Uploading…" })).toBeDisabled();
+  expect(input).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("Uploading your document");
+
+  await act(async () => finishUpload(uploadedDocument));
+
+  expect(screen.getByRole("button", { name: "Upload" })).toBeEnabled();
+  expect(uploadDocument).toHaveBeenCalledTimes(1);
+});
+
+it("rejects a file that is not a PDF without uploading it", async () => {
+  const user = userEvent.setup({ applyAccept: false });
+  render(<DocumentUpload />);
+
+  await user.upload(screen.getByLabelText("PDF document"), new File(["text"], "notes.txt", { type: "text/plain" }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent("Choose a PDF document.");
+  expect(uploadDocument).not.toHaveBeenCalled();
+});
+
+it("rejects an empty PDF without uploading it", async () => {
+  const user = userEvent.setup();
+  render(<DocumentUpload />);
+
+  await user.upload(screen.getByLabelText("PDF document"), new File([], "empty.pdf", { type: "application/pdf" }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent("The selected document is empty.");
+  expect(uploadDocument).not.toHaveBeenCalled();
+});
+
+it("shows an upload error and lets the user choose the same file again", async () => {
+  const user = userEvent.setup();
+  vi.mocked(uploadDocument)
+    .mockRejectedValueOnce(new Error("Document storage is temporarily unavailable"))
+    .mockResolvedValueOnce(uploadedDocument);
+  const onUploaded = vi.fn();
+  render(<DocumentUpload onUploaded={onUploaded} />);
+  const input = screen.getByLabelText("PDF document");
+  const file = createPdf();
+
+  await user.upload(input, file);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Document storage is temporarily unavailable");
+  expect(screen.getByRole("button", { name: "Upload" })).toBeEnabled();
+  expect(onUploaded).not.toHaveBeenCalled();
+
+  await user.upload(input, file);
+
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(uploadDocument).toHaveBeenCalledTimes(2);
+  expect(onUploaded).toHaveBeenCalledTimes(1);
+});
+
+it("tells the workspace when the session has expired", async () => {
+  const user = userEvent.setup();
+  vi.mocked(uploadDocument).mockRejectedValue(new SessionExpiredError());
+  const onSessionExpired = vi.fn();
+  render(<DocumentUpload onSessionExpired={onSessionExpired} />);
+
+  await user.upload(screen.getByLabelText("PDF document"), createPdf());
+
+  await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
 });

@@ -104,7 +104,6 @@ describe("document workspace", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled());
 
     await user.upload(screen.getByLabelText("PDF document"), new File(["pdf"], "new.pdf", { type: "application/pdf" }));
-    await user.click(screen.getByRole("button", { name: "Upload document" }));
 
     const list = screen.getByRole("region", { name: "Saved documents" });
     expect(await within(list).findByRole("heading", { name: "new.pdf" })).toBeInTheDocument();

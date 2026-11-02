@@ -137,7 +137,6 @@ it("ignores an old upload failure after signing into a new session", async () =>
   render(<AuthenticatedWorkspace />);
   const user = userEvent.setup();
   await user.upload(await screen.findByLabelText("PDF document"), new File(["%PDF-1.7"], "pending.pdf", { type: "application/pdf" }));
-  await user.click(screen.getByRole("button", { name: "Upload document" }));
   await user.click(screen.getByRole("button", { name: "Sign out" }));
   await fillCredentials();
   await user.click(screen.getByRole("button", { name: "Sign in" }));

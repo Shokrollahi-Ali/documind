@@ -29,7 +29,7 @@ export default function DocumentDelete({ document, onDeleted }: {
 
   return (
     <>
-      <Button variant="danger-outline" onClick={openDialog} aria-label={`Delete ${document.original_filename}`} className="mt-4">
+      <Button size="sm" onClick={openDialog} aria-label={`Delete ${document.original_filename}`} className="mt-4">
         Delete
       </Button>
       <dialog
