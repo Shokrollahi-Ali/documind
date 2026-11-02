@@ -9,6 +9,7 @@ import Button from "@/components/button";
 import { RefreshIcon } from "@/components/icons";
 import type { DocumentPage } from "../api/list-documents";
 import { documentsQueryKey, getDocumentsQueryKey } from "../hooks/use-documents";
+import { useFittingPageSize } from "../hooks/use-fitting-page-size";
 import type { DocumentMetadata } from "../lib/document";
 import DocumentListItem from "./document-list-item";
 import DocumentPagination from "./document-pagination";
@@ -19,6 +20,8 @@ const noticeDurationMs = 5000;
 type DocumentListProps = {
   documents: UseQueryResult<DocumentPage>;
   page: number;
+  pageSize: number;
+  onPageSizeChange: (pageSize: number) => void;
   selectedDocumentId?: string;
   onPageChange: (page: number) => void;
   onSelect: (document: DocumentMetadata) => void;
@@ -30,6 +33,8 @@ type DocumentListProps = {
 export default function DocumentList({
   documents,
   page,
+  pageSize,
+  onPageSizeChange,
   selectedDocumentId,
   onPageChange,
   onSelect,
@@ -56,12 +61,13 @@ export default function DocumentList({
     });
     setDeletionNotice({ message: "Document deleted." });
     onDeleted(documentId);
-    const currentPage = queryClient.getQueryData<DocumentPage>(getDocumentsQueryKey(page));
+    const currentPage = queryClient.getQueryData<DocumentPage>(getDocumentsQueryKey(page, pageSize));
     if (page > 0 && currentPage?.items.length === 0) onPageChange(page - 1);
     await queryClient.invalidateQueries({ queryKey: documentsQueryKey });
   }
 
-  const items = documents.data?.items ?? [];
+  const items = (documents.data?.items ?? []).slice(0, pageSize);
+  const panelRef = useFittingPageSize(items.length > 0, onPageSizeChange);
   const isRefreshing = documents.isFetching && !documents.isLoading;
   const canGoPrevious = page > 0 && !documents.isFetching;
   const canGoNext = Boolean(documents.data?.has_more) && !documents.isFetching && !documents.isError;
@@ -70,7 +76,7 @@ export default function DocumentList({
     : "No documents on this page. Return to the previous page.";
 
   return (
-    <section aria-labelledby="your-documents-heading">
+    <section ref={panelRef} aria-labelledby="your-documents-heading" className="min-w-0 self-start">
       <div className="flex flex-wrap items-center gap-1.5">
         <h2 ref={heading} id="your-documents-heading" tabIndex={-1} className="mr-auto text-lg font-medium focus:outline-none">Your documents</h2>
         <Button

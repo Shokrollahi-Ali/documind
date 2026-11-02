@@ -19,7 +19,8 @@ export default function DocumentListItem({ document, isSelected, onSelect, onDel
           type="button"
           onClick={() => onSelect(document)}
           aria-current={isSelected ? "true" : undefined}
-          className="break-all text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:outline-2 focus-visible:after:outline-blue-600"
+          title={document.original_filename}
+          className="block w-full truncate text-left outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:outline-2 focus-visible:after:outline-blue-600"
         >
           {document.original_filename}
         </button>

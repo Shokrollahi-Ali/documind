@@ -1,11 +1,11 @@
 "use client";
 
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SessionExpiredError } from "@/lib/client/session-expired";
 
-import { documentsQueryKey, useDocuments } from "../hooks/use-documents";
+import { documentsPageSize, documentsQueryKey, useDocuments } from "../hooks/use-documents";
 import { useSelectedDocument } from "../hooks/use-selected-document";
 import type { DocumentMetadata } from "../lib/document";
 import DocumentList from "./document-list";
@@ -13,8 +13,18 @@ import DocumentPanel from "./document-panel";
 
 function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void }) {
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(0);
-  const documents = useDocuments(page);
+  const [{ page, pageSize }, setPagination] = useState({ page: 0, pageSize: documentsPageSize });
+  const documents = useDocuments(page, pageSize);
+
+  function setPage(nextPage: number) {
+    setPagination((current) => ({ ...current, page: nextPage }));
+  }
+
+  const handlePageSizeChange = useCallback((nextPageSize: number) => {
+    setPagination((current) => current.pageSize === nextPageSize
+      ? current
+      : { page: 0, pageSize: nextPageSize });
+  }, []);
   const { selectedDocument, selectDocument, clearSelection } = useSelectedDocument(documents.data?.items);
 
   function handleUploaded(uploadedDocument: DocumentMetadata) {
@@ -32,6 +42,8 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
       <DocumentList
         documents={documents}
         page={page}
+        pageSize={pageSize}
+        onPageSizeChange={handlePageSizeChange}
         selectedDocumentId={selectedDocument?.id}
         onPageChange={setPage}
         onSelect={selectDocument}

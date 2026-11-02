@@ -406,3 +406,73 @@ describe("asking questions", () => {
     expect(screen.getByText(/Ask anything about this document/)).toBeInTheDocument();
   });
 });
+
+
+describe("pagination fitted to the screen", () => {
+  function mockLayout() {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 1000 });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.tagName === "LI") return { height: 100, top: 200 } as DOMRect;
+      if (this.tagName === "UL") return { height: 0, top: 200 } as DOMRect;
+      if (this.tagName === "NAV") return { height: 40, top: 0 } as DOMRect;
+      return { height: 0, top: 0 } as DOMRect;
+    });
+  }
+
+  function measuredPage(url: string) {
+    const parameters = new URL(url, "http://localhost").searchParams;
+    const limit = Number(parameters.get("limit"));
+    const offset = Number(parameters.get("offset"));
+    return Response.json({
+      items: [{ ...document, id: String(offset), original_filename: offset ? "older.pdf" : "saved.pdf" }],
+      limit,
+      offset,
+      has_more: true,
+    });
+  }
+
+  it("keeps Next on page two while a large-screen request is pending", async () => {
+    mockLayout();
+    const user = userEvent.setup();
+    let completeNextPage!: () => void;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+      if (url.includes("offset=7")) {
+        return new Promise<Response>((resolve) => { completeNextPage = () => resolve(measuredPage(url)); });
+      }
+      return Promise.resolve(measuredPage(url));
+    }));
+    render(<DocumentWorkspace />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/documents?limit=7&offset=0", expect.any(Object)));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "saved.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+
+    await act(async () => completeNextPage());
+    expect(await screen.findByRole("heading", { name: "older.pdf" })).toBeInTheDocument();
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    expect(await screen.findByRole("heading", { name: "saved.pdf" })).toBeInTheDocument();
+    expect(screen.getByText("Page 1")).toBeInTheDocument();
+  });
+
+  it("reduces the page size and resets the offset after the screen gets shorter", async () => {
+    mockLayout();
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(measuredPage(url))));
+    render(<DocumentWorkspace />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/documents?limit=7&offset=0", expect.any(Object)));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "older.pdf" });
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 400 });
+    act(() => window.dispatchEvent(new Event("resize")));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/documents?limit=1&offset=0", expect.any(Object)));
+    expect(screen.getByText("Page 1")).toBeInTheDocument();
+  });
+});
