@@ -69,7 +69,7 @@ export default function DocumentUpload({ onUploaded, onSessionExpired }: {
         {isUploading ? "Uploading…" : "Upload"}
       </Button>
       {isUploading && <p role="status" className="sr-only">Uploading your document…</p>}
-      {error && <p role="alert" className="basis-full text-xs text-red-700 dark:text-red-400">{error}</p>}
+      {error && <p role="alert" className="basis-full text-sm text-red-700 dark:text-red-400">{error}</p>}
     </>
   );
 }

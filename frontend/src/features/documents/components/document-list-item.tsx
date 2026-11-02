@@ -14,7 +14,7 @@ export default function DocumentListItem({ document, isSelected, onSelect, onDel
 }) {
   return (
     <li className={`relative rounded-xl border p-3 transition-colors ${isSelected ? selectedStyles : unselectedStyles}`}>
-      <h3 className="text-[13px] font-medium">
+      <h3 className="text-base font-medium">
         <button
           type="button"
           onClick={() => onSelect(document)}
@@ -24,7 +24,7 @@ export default function DocumentListItem({ document, isSelected, onSelect, onDel
           {document.original_filename}
         </button>
       </h3>
-      <p className="text-xs text-zinc-600 dark:text-zinc-400">{formatFileSize(document.size_bytes)}</p>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">{formatFileSize(document.size_bytes)}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
         <DocumentStatusBadge status={document.status} />
         <DocumentDelete document={document} onDeleted={onDeleted} />

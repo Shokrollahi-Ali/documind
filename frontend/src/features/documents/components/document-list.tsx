@@ -72,7 +72,7 @@ export default function DocumentList({
   return (
     <section aria-labelledby="your-documents-heading">
       <div className="flex flex-wrap items-center gap-1.5">
-        <h2 ref={heading} id="your-documents-heading" tabIndex={-1} className="mr-auto text-base font-medium focus:outline-none">Your documents</h2>
+        <h2 ref={heading} id="your-documents-heading" tabIndex={-1} className="mr-auto text-lg font-medium focus:outline-none">Your documents</h2>
         <Button
           size="icon"
           aria-label={isRefreshing ? "Refreshing…" : "Refresh list"}
@@ -84,11 +84,11 @@ export default function DocumentList({
         </Button>
         <DocumentUpload onUploaded={onUploaded} onSessionExpired={onSessionExpired} />
       </div>
-      {deletionNotice && <p role="status" className="mt-3 text-xs">{deletionNotice.message}</p>}
-      {documents.isLoading && <p role="status" className="mt-3 text-xs">Loading documents…</p>}
-      {documents.isError && <p role="alert" className="mt-3 text-xs text-red-700 dark:text-red-400">Could not load the latest documents. Use Refresh list to try again.</p>}
+      {deletionNotice && <p role="status" className="mt-3 text-sm">{deletionNotice.message}</p>}
+      {documents.isLoading && <p role="status" className="mt-3 text-sm">Loading documents…</p>}
+      {documents.isError && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-400">Could not load the latest documents. Use Refresh list to try again.</p>}
       {documents.data && items.length === 0 && (
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{emptyMessage}</p>
+        <p className="mt-4 text-base text-zinc-600 dark:text-zinc-400">{emptyMessage}</p>
       )}
       {items.length > 0 && (
         <ul className="mt-4 flex flex-col gap-2">

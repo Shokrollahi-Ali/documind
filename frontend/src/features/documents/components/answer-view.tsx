@@ -36,7 +36,7 @@ export default function AnswerView({ answer }: { answer: DocumentAnswer }) {
 
   return (
     <div>
-      <p className="text-sm leading-6 wrap-break-word">
+      <p className="text-justify text-base leading-7 hyphens-auto wrap-break-word">
         {parts.map((part, index) =>
           part.kind === "text" ? (
             <span key={index}>{part.text}</span>

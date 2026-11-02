@@ -11,7 +11,7 @@ export default function DocumentStatusBadge({ status }: { status: DocumentStatus
   const stage = getDocumentStage(status);
 
   return (
-    <span className={`inline-flex h-5 items-center rounded-full px-2 text-[11px] ${stageStyles[stage]}`}>
+    <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-sm ${stageStyles[stage]}`}>
       {documentStageLabels[stage]}
     </span>
   );

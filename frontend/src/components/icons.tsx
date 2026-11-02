@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-const iconSize = 14;
+const iconSize = 16;
 
 type IconProps = { className?: string };
 

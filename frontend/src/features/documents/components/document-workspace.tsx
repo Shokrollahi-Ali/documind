@@ -28,7 +28,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
   }
 
   return (
-    <div className="mt-8 grid gap-8 md:grid-cols-[17rem_minmax(0,1fr)]">
+    <div className="mt-8 grid gap-8 md:grid-cols-[20rem_minmax(0,1fr)]">
       <DocumentList
         documents={documents}
         page={page}

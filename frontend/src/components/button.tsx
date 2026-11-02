@@ -8,9 +8,9 @@ const variants = {
 };
 
 const sizes = {
-  md: "h-7 gap-1.5 px-2 text-xs",
-  sm: "h-6 gap-1 px-2 text-[11px]",
-  icon: "size-7 text-xs",
+  md: "h-9 gap-1.5 px-3 text-sm",
+  sm: "h-8 gap-1 px-2.5 text-sm",
+  icon: "size-9 text-sm",
 };
 
 type ButtonProps = ComponentProps<"button"> & {

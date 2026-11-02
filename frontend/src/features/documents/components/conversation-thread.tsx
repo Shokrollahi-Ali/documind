@@ -3,7 +3,7 @@ import AnswerView from "./answer-view";
 
 function QuestionBubble({ question }: { question: string }) {
   return (
-    <p className="rounded-lg bg-zinc-100 px-3 py-2 text-sm wrap-break-word dark:bg-zinc-800">{question}</p>
+    <p className="rounded-lg bg-zinc-100 px-3 py-2 text-base wrap-break-word dark:bg-zinc-800">{question}</p>
   );
 }
 
@@ -16,7 +16,7 @@ export default function ConversationThread({ turns, pendingQuestion }: {
   return (
     <div aria-live="polite" className="flex flex-col gap-5">
       {turns.length === 0 && !hasPendingQuestion && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-base text-zinc-600 dark:text-zinc-400">
           Ask anything about this document. Answers come only from its text, with the pages they came from.
         </p>
       )}
@@ -29,7 +29,7 @@ export default function ConversationThread({ turns, pendingQuestion }: {
       {hasPendingQuestion && (
         <div className="flex flex-col gap-2">
           <QuestionBubble question={pendingQuestion} />
-          <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p role="status" className="text-base text-zinc-600 dark:text-zinc-400">
             Reading the document… this can take up to a minute.
           </p>
         </div>
