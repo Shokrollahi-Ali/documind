@@ -13,10 +13,20 @@ export function getApiUrl(path: string): URL {
   return url;
 }
 
-export function getApiTimeoutMs(): number {
-  const timeoutMs = Number(process.env.DOCUMIND_API_TIMEOUT_MS ?? "10000");
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2147483647) {
-    throw new Error("Invalid DOCUMIND_API_TIMEOUT_MS");
+const maximumTimeoutMs = 2147483647;
+
+function readTimeoutMs(variableName: string, defaultTimeoutMs: number): number {
+  const timeoutMs = Number(process.env[variableName] ?? defaultTimeoutMs);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > maximumTimeoutMs) {
+    throw new Error(`Invalid ${variableName}`);
   }
   return timeoutMs;
+}
+
+export function getApiTimeoutMs(): number {
+  return readTimeoutMs("DOCUMIND_API_TIMEOUT_MS", 10000);
+}
+
+export function getAnswerTimeoutMs(): number {
+  return readTimeoutMs("DOCUMIND_ANSWER_TIMEOUT_MS", 100000);
 }

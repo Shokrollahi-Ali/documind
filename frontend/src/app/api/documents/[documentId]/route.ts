@@ -1,4 +1,4 @@
-import { getDocumentApiConfiguration } from "@/lib/server/document-api";
+import { getDocumentApiConfiguration, isDocumentId } from "@/lib/server/document-api";
 import { validateMutationOrigin } from "@/lib/server/request-origin";
 import { getSessionHeaders } from "@/lib/server/session-cookies";
 
@@ -10,7 +10,7 @@ export async function DELETE(
   if (rejection) return rejection;
 
   const { documentId } = await params;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) {
+  if (!isDocumentId(documentId)) {
     return Response.json({ detail: "Invalid document ID." }, { status: 422 });
   }
 
