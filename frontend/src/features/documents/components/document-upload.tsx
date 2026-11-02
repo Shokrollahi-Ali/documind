@@ -7,12 +7,13 @@ import Button from "@/components/button";
 import { UploadIcon } from "@/components/icons";
 import { SessionExpiredError } from "@/lib/client/session-expired";
 import { uploadDocument } from "../api/upload-document";
+import type { DocumentMetadata } from "../lib/document";
 import { validateDocumentFile } from "../lib/validate-document-file";
 
 const pdfFileTypes = ".pdf,application/pdf";
 
 export default function DocumentUpload({ onUploaded, onSessionExpired }: {
-  onUploaded?: () => void;
+  onUploaded?: (document: DocumentMetadata) => void;
   onSessionExpired?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,8 +27,8 @@ export default function DocumentUpload({ onUploaded, onSessionExpired }: {
   async function sendFile(file: File) {
     setIsUploading(true);
     try {
-      await uploadDocument(file);
-      onUploaded?.();
+      const uploadedDocument = await uploadDocument(file);
+      onUploaded?.(uploadedDocument);
     } catch (uploadError) {
       if (uploadError instanceof SessionExpiredError) onSessionExpired?.();
       setError(uploadError instanceof Error ? uploadError.message : "The upload failed.");
@@ -53,7 +54,7 @@ export default function DocumentUpload({ onUploaded, onSessionExpired }: {
   }
 
   return (
-    <div className="mt-6">
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -68,7 +69,7 @@ export default function DocumentUpload({ onUploaded, onSessionExpired }: {
         {isUploading ? "Uploading…" : "Upload"}
       </Button>
       {isUploading && <p role="status" className="sr-only">Uploading your document…</p>}
-      {error && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-400">{error}</p>}
-    </div>
+      {error && <p role="alert" className="basis-full text-xs text-red-700 dark:text-red-400">{error}</p>}
+    </>
   );
 }

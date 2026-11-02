@@ -5,24 +5,42 @@ import { useEffect, useRef, useState } from "react";
 
 import { SessionExpiredError } from "@/lib/client/session-expired";
 
-import { documentsQueryKey } from "../hooks/use-documents";
+import { documentsQueryKey, useDocuments } from "../hooks/use-documents";
+import { useSelectedDocument } from "../hooks/use-selected-document";
+import type { DocumentMetadata } from "../lib/document";
 import DocumentList from "./document-list";
-import DocumentUpload from "./document-upload";
+import DocumentPanel from "./document-panel";
 
 function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void }) {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
+  const documents = useDocuments(page);
+  const { selectedDocument, selectDocument, clearSelection } = useSelectedDocument(documents.data?.items);
 
-  function handleUploadCompleted() {
+  function handleUploaded(uploadedDocument: DocumentMetadata) {
     setPage(0);
+    selectDocument(uploadedDocument);
     void queryClient.invalidateQueries({ queryKey: documentsQueryKey });
   }
 
+  function handleDeleted(documentId: string) {
+    if (selectedDocument?.id === documentId) clearSelection();
+  }
+
   return (
-    <>
-      <DocumentUpload onUploaded={handleUploadCompleted} onSessionExpired={onSessionExpired} />
-      <DocumentList page={page} onPageChange={setPage} />
-    </>
+    <div className="mt-8 grid gap-8 md:grid-cols-[17rem_minmax(0,1fr)]">
+      <DocumentList
+        documents={documents}
+        page={page}
+        selectedDocumentId={selectedDocument?.id}
+        onPageChange={setPage}
+        onSelect={selectDocument}
+        onUploaded={handleUploaded}
+        onDeleted={handleDeleted}
+        onSessionExpired={onSessionExpired}
+      />
+      <DocumentPanel document={selectedDocument} />
+    </div>
   );
 }
 

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { uploadDocument } from "../api/upload-document";
+import type { DocumentMetadata } from "../lib/document";
 import DocumentWorkspace from "./document-workspace";
 
 vi.mock("../api/upload-document", () => ({ uploadDocument: vi.fn() }));
@@ -12,7 +13,7 @@ const document = {
   original_filename: "saved.pdf",
   content_type: "application/pdf",
   size_bytes: 128,
-  status: "uploaded" as const,
+  status: "uploaded" as DocumentMetadata["status"],
   created_at: "2026-10-15T12:00:00Z",
 };
 
@@ -108,6 +109,7 @@ describe("document workspace", () => {
     const list = screen.getByRole("region", { name: "Saved documents" });
     expect(await within(list).findByRole("heading", { name: "new.pdf" })).toBeInTheDocument();
     expect(screen.getByText("Page 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "new.pdf" })).toBeInTheDocument();
   });
 });
 
@@ -244,4 +246,94 @@ it("allows Escape dismissal before deletion starts", async () => {
   render(<DocumentWorkspace />);
   await user.click(await screen.findByRole("button", { name: "Delete saved.pdf" }));
   expect(fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }))).toBe(true);
+});
+
+describe("document selection", () => {
+  it("asks the user to pick a document before one is selected", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(pageResponse())));
+    render(<DocumentWorkspace />);
+
+    await screen.findByRole("heading", { name: "saved.pdf" });
+
+    expect(screen.getByText("Select a document from the list, or upload a new one.")).toBeInTheDocument();
+  });
+
+  it("shows the selected document and its progress in the panel", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(pageResponse())));
+    render(<DocumentWorkspace />);
+
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+
+    expect(screen.getByRole("heading", { level: 2, name: "saved.pdf" })).toBeInTheDocument();
+    expect(screen.getByText(/still being prepared/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "saved.pdf" })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("explains why a failed document cannot be used", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(
+      pageResponse([{ ...document, status: "failed" }]),
+    )));
+    render(<DocumentWorkspace />);
+
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+
+    expect(screen.getByText(/Scanned or password-protected PDFs/)).toBeInTheDocument();
+    expect(screen.getByText("Delete it from the list and upload a different file.")).toBeInTheDocument();
+  });
+
+  it("updates the selected document when the list refreshes", async () => {
+    const user = userEvent.setup();
+    let status: DocumentMetadata["status"] = "processing";
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(
+      pageResponse([{ ...document, status }]),
+    )));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+    expect(screen.getByText(/still being prepared/)).toBeInTheDocument();
+
+    status = "ready";
+    await user.click(screen.getByRole("button", { name: "Refresh list" }));
+
+    await waitFor(() => expect(screen.queryByText(/still being prepared/)).not.toBeInTheDocument());
+    expect(screen.getAllByText("Ready to ask")).not.toHaveLength(0);
+  });
+
+  it("keeps the selected document in the panel while browsing other pages", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => Promise.resolve(
+      url.includes("offset=10")
+        ? pageResponse([{ ...document, id: "older-id", original_filename: "older.pdf" }], 10)
+        : pageResponse([document], 0, true),
+    )));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(await screen.findByRole("heading", { level: 3, name: "older.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "saved.pdf" })).toBeInTheDocument();
+  });
+
+  it("clears the panel when the selected document is deleted", async () => {
+    const user = userEvent.setup();
+    let deleted = false;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url: string, options: RequestInit) => {
+      if (options.method === "DELETE") {
+        deleted = true;
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(pageResponse(deleted ? [] : [document]));
+    }));
+    render(<DocumentWorkspace />);
+    await user.click(await screen.findByRole("button", { name: "saved.pdf" }));
+    expect(screen.getByRole("heading", { level: 2, name: "saved.pdf" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete saved.pdf" }));
+    await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+
+    expect(await screen.findByText("Document deleted.")).toBeInTheDocument();
+    expect(screen.getByText("Select a document from the list, or upload a new one.")).toBeInTheDocument();
+  });
 });

@@ -30,7 +30,7 @@ export default function DocumentDelete({ document, onDeleted }: {
 
   return (
     <>
-      <Button variant="ghost" size="icon" onClick={openDialog} aria-label={`Delete ${document.original_filename}`} title="Delete">
+      <Button variant="ghost" size="icon" className="relative" onClick={openDialog} aria-label={`Delete ${document.original_filename}`} title="Delete">
         <TrashIcon />
       </Button>
       <dialog

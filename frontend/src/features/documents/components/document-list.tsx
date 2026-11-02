@@ -1,19 +1,42 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 
 import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/button";
 import { RefreshIcon } from "@/components/icons";
 import type { DocumentPage } from "../api/list-documents";
-import { documentsQueryKey, getDocumentsQueryKey, useDocuments } from "../hooks/use-documents";
+import { documentsQueryKey, getDocumentsQueryKey } from "../hooks/use-documents";
+import type { DocumentMetadata } from "../lib/document";
 import DocumentListItem from "./document-list-item";
 import DocumentPagination from "./document-pagination";
+import DocumentUpload from "./document-upload";
 
 const noticeDurationMs = 5000;
 
-export default function DocumentList({ page, onPageChange }: { page: number; onPageChange: (page: number) => void }) {
+type DocumentListProps = {
+  documents: UseQueryResult<DocumentPage>;
+  page: number;
+  selectedDocumentId?: string;
+  onPageChange: (page: number) => void;
+  onSelect: (document: DocumentMetadata) => void;
+  onUploaded: (document: DocumentMetadata) => void;
+  onDeleted: (documentId: string) => void;
+  onSessionExpired?: () => void;
+};
+
+export default function DocumentList({
+  documents,
+  page,
+  selectedDocumentId,
+  onPageChange,
+  onSelect,
+  onUploaded,
+  onDeleted,
+  onSessionExpired,
+}: DocumentListProps) {
   const queryClient = useQueryClient();
   const heading = useRef<HTMLHeadingElement>(null);
   const [deletionNotice, setDeletionNotice] = useState<{ message: string } | null>(null);
@@ -32,12 +55,12 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
       return { ...cachedPage, items: cachedPage.items.filter((item) => item.id !== documentId) };
     });
     setDeletionNotice({ message: "Document deleted." });
+    onDeleted(documentId);
     const currentPage = queryClient.getQueryData<DocumentPage>(getDocumentsQueryKey(page));
     if (page > 0 && currentPage?.items.length === 0) onPageChange(page - 1);
     await queryClient.invalidateQueries({ queryKey: documentsQueryKey });
   }
 
-  const documents = useDocuments(page);
   const items = documents.data?.items ?? [];
   const isRefreshing = documents.isFetching && !documents.isLoading;
   const canGoPrevious = page > 0 && !documents.isFetching;
@@ -47,9 +70,9 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
     : "No documents on this page. Return to the previous page.";
 
   return (
-    <section aria-labelledby="saved-documents-heading" className="mt-10 max-w-md">
-      <div className="flex items-center justify-between gap-2">
-        <h2 ref={heading} id="saved-documents-heading" tabIndex={-1} className="text-base font-medium focus:outline-none">Saved documents</h2>
+    <section aria-labelledby="saved-documents-heading">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <h2 ref={heading} id="saved-documents-heading" tabIndex={-1} className="mr-auto text-base font-medium focus:outline-none">Saved documents</h2>
         <Button
           size="icon"
           aria-label={isRefreshing ? "Refreshing…" : "Refresh list"}
@@ -59,6 +82,7 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
         >
           <RefreshIcon className={isRefreshing ? "animate-spin" : ""} />
         </Button>
+        <DocumentUpload onUploaded={onUploaded} onSessionExpired={onSessionExpired} />
       </div>
       {deletionNotice && <p role="status" className="mt-3 text-xs">{deletionNotice.message}</p>}
       {documents.isLoading && <p role="status" className="mt-3 text-xs">Loading documents…</p>}
@@ -69,7 +93,13 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
       {items.length > 0 && (
         <ul className="mt-4 flex flex-col gap-2">
           {items.map((document) => (
-            <DocumentListItem key={document.id} document={document} onDeleted={handleDeleted} />
+            <DocumentListItem
+              key={document.id}
+              document={document}
+              isSelected={document.id === selectedDocumentId}
+              onSelect={onSelect}
+              onDeleted={handleDeleted}
+            />
           ))}
         </ul>
       )}

@@ -54,7 +54,7 @@ it("uploads the selected PDF right away and tells the workspace", async () => {
   await user.upload(screen.getByLabelText("PDF document"), file);
 
   expect(uploadDocument).toHaveBeenCalledWith(file);
-  await waitFor(() => expect(onUploaded).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(onUploaded).toHaveBeenCalledWith(uploadedDocument));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
