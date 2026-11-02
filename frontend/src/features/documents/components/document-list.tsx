@@ -1,24 +1,16 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/button";
 import DocumentDelete from "./document-delete";
 import type { DocumentPage } from "../api/list-documents";
-import { listDocuments } from "../api/list-documents";
+import { documentsQueryKey, getDocumentsQueryKey, useDocuments } from "../hooks/use-documents";
+import { documentStageLabels, getDocumentStage } from "../lib/document-status";
 
-const pageSize = 10;
 const noticeDurationMs = 5000;
-const statusLabels = {
-  uploaded: "Uploaded",
-  processing: "Processing",
-  extracted: "Extracted",
-  chunked: "Chunked",
-  ready: "Ready",
-  failed: "Failed",
-};
 
 export default function DocumentList({ page, onPageChange }: { page: number; onPageChange: (page: number) => void }) {
   const queryClient = useQueryClient();
@@ -33,23 +25,18 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
   }, [deletionNotice]);
 
   async function handleDeleted(documentId: string) {
-    await queryClient.cancelQueries({ queryKey: ["documents"] });
-    queryClient.setQueriesData<DocumentPage>({ queryKey: ["documents"] }, (cachedPage) => {
+    await queryClient.cancelQueries({ queryKey: documentsQueryKey });
+    queryClient.setQueriesData<DocumentPage>({ queryKey: documentsQueryKey }, (cachedPage) => {
       if (!cachedPage) return cachedPage;
       return { ...cachedPage, items: cachedPage.items.filter((item) => item.id !== documentId) };
     });
     setDeletionNotice({ message: "Document deleted." });
-    const currentPage = queryClient.getQueryData<DocumentPage>(["documents", { limit: pageSize, offset: page * pageSize }]);
+    const currentPage = queryClient.getQueryData<DocumentPage>(getDocumentsQueryKey(page));
     if (page > 0 && currentPage?.items.length === 0) onPageChange(page - 1);
-    await queryClient.invalidateQueries({ queryKey: ["documents"] });
+    await queryClient.invalidateQueries({ queryKey: documentsQueryKey });
   }
 
-  const documents = useQuery({
-    queryKey: ["documents", { limit: pageSize, offset: page * pageSize }],
-    queryFn: ({ signal }) => listDocuments(pageSize, page * pageSize, signal),
-    staleTime: 30000,
-    retry: false,
-  });
+  const documents = useDocuments(page);
 
   return (
     <section aria-labelledby="saved-documents-heading" className="mt-10 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800">
@@ -74,7 +61,7 @@ export default function DocumentList({ page, onPageChange }: { page: number; onP
                 <li key={document.id} className="py-5 first:pt-0">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <h3 className="min-w-0 break-all font-medium">{document.original_filename}</h3>
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{statusLabels[document.status]}</span>
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{documentStageLabels[getDocumentStage(document.status)]}</span>
                   </div>
                   <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
                     <div><dt>Size</dt><dd>{document.size_bytes < 10000 ? "< 0.01" : new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(document.size_bytes / 1000000)} MB</dd></div>

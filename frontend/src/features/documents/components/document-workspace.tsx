@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { SessionExpiredError } from "@/lib/client/session-expired";
 
+import { documentsQueryKey } from "../hooks/use-documents";
 import DocumentList from "./document-list";
 import DocumentUpload from "./document-upload";
 
@@ -14,7 +15,7 @@ function WorkspaceContent({ onSessionExpired }: { onSessionExpired?: () => void 
 
   function handleUploadCompleted() {
     setPage(0);
-    void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    void queryClient.invalidateQueries({ queryKey: documentsQueryKey });
   }
 
   return (
