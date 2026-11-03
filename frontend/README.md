@@ -16,17 +16,15 @@ The browser never talks to the FastAPI backend directly. It calls this app's own
 
 Use Node.js 24. The backend and its services must be running first:
 
-- `docker compose up -d` from the repository root starts PostgreSQL, Redis and LocalStack.
-- The FastAPI API must be running.
-- The dispatcher and the worker must be running, or uploaded documents stay on Preparing. Run each in its own terminal:
+- Configure the root `.env` and `backend/.env` as described in the [project README](../README.md).
+- Stop any API, dispatcher, and Celery worker processes you previously started manually.
+- From the repository root, build and start the backend stack:
 
 ```bash
-cd backend && PYTHONPATH=src uv run python -m documind.dispatcher
+docker compose up -d --build --wait --wait-timeout 180
 ```
 
-```bash
-cd backend && PYTHONPATH=src uv run celery -A documind.worker worker --loglevel=INFO
-```
+Compose starts PostgreSQL, Redis, and LocalStack, applies database migrations, and starts the API, dispatcher, and Celery worker. The API is available at `http://127.0.0.1:8000`. No separate backend terminals are needed.
 
 To ask questions, the backend also needs `DOCUMIND_OPENAI_API_KEY` and `DOCUMIND_ANSWER_MODEL`.
 

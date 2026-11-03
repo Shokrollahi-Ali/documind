@@ -1,8 +1,71 @@
 name: documind
 
+x-backend: &backend
+  build:
+    context: ./backend
+  image: documind-backend:local
+  init: true
+  restart: unless-stopped
+  env_file:
+    - ./backend/.env
+  environment:
+    DOCUMIND_DATABASE_URL: "postgresql+psycopg://documind:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the root .env}@postgres:5432/documind"
+    DOCUMIND_CELERY_BROKER_URL: redis://redis:6379/0
+    DOCUMIND_S3_ENDPOINT_URL: http://localstack:4566
+    DOCUMIND_S3_BUCKET: ${DOCUMIND_S3_BUCKET:?Set DOCUMIND_S3_BUCKET in the root .env}
+    DOCUMIND_S3_REGION: ${DOCUMIND_S3_REGION:?Set DOCUMIND_S3_REGION in the root .env}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    localstack:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
 services:
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).close()"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command:
+      - celery
+      - -A
+      - documind.worker
+      - worker
+      - --loglevel=INFO
+      - --concurrency=${DOCUMIND_WORKER_CONCURRENCY:-2}
+    stop_grace_period: ${DOCUMIND_WORKER_STOP_GRACE_PERIOD:-5m}
+
+  dispatcher:
+    <<: *backend
+    command: ["python", "-m", "documind.dispatcher"]
+
   postgres:
     image: pgvector/pgvector:0.8.7-pg17-bookworm
+    restart: unless-stopped
     environment:
       POSTGRES_USER: documind
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -19,6 +82,7 @@ services:
 
   localstack:
     image: localstack/localstack:2026.08.0
+    restart: unless-stopped
     environment:
       LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:?Set LOCALSTACK_AUTH_TOKEN in the root .env}
       SERVICES: s3
@@ -38,6 +102,7 @@ services:
       start_period: 30s
   redis:
     image: redis:8
+    restart: unless-stopped
     command:
       - redis-server
       - --appendonly
